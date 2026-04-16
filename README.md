@@ -2,6 +2,8 @@
 
 Local web app for browsing, searching, and editing AI conversation history and memory files. Reads data directly from Claude Code, VS Code Copilot, Gemini CLI, and Codex CLI — no cloud, no database, everything stays on your machine.
 
+> **aireplay is a local development tool — not intended for production or public deployment.** It has no authentication and binds to `localhost` by default. Do not expose it to the internet.
+
 ## Install
 
 ```sh
@@ -28,9 +30,12 @@ Open [http://localhost:4123](http://localhost:4123)
 
 - **Browse** conversations from multiple AI tools in one UI
 - **Search** across all conversations and memory files with fuzzy matching
-- **Edit** memory files (CLAUDE.md, GEMINI.md, etc.) directly in the browser
+- **Edit** memory files with markdown preview (CLAUDE.md, GEMINI.md, etc.)
+- **Render** assistant messages as formatted markdown with syntax highlighting
+- **Collapse** custom XML context tags (e.g. `<ide_opened_file>`) into expandable blocks
 - **Filter** by provider, project, or date
 - **Sync** to re-scan provider data on demand
+- **Theme** — light, dark, or follow system preference with 7 accent colors
 
 ## Supported Providers
 
@@ -44,8 +49,7 @@ Open [http://localhost:4123](http://localhost:4123)
 ## Requirements
 
 - Node.js 20+ or [Bun](https://bun.sh/) 1.x+
-- macOS (reads `~/Library/Application Support/Code/` for Copilot, `~/.claude/` for Claude, etc.)
-- Linux support is planned — most providers use `~/.config/` paths
+- macOS, Linux, and Windows supported (auto-detects provider paths per platform)
 
 ## Stack
 
@@ -63,17 +67,22 @@ server/           Hono API (parsers, routes, cache)
   parsers/        Provider-specific file parsers
   routes/         REST endpoints
 src/              Vue frontend
-  components/     Reusable UI components
-  composables/    Vue composables for data fetching
+  components/     Reusable UI components (+ shadcn-vue primitives)
   pages/          Route page components
   types/          Shared TypeScript types
+  utils/          Shared utilities
 ```
 
 ## Options
 
 ```
-aireplay --port 3000    # Use a custom port (default: 4123)
+aireplay --port 3000              # Use a custom port (default: 4123)
+HOST=aireplay.local bun dev       # Custom hostname (add to /etc/hosts first)
 ```
+
+## Security
+
+aireplay runs a local HTTP server with **no authentication**. Conversations are read-only, but memory files are writable (editable from the browser). Keep it bound to `localhost` — do not expose it on a public network or deploy it to a server.
 
 ## Contributing
 

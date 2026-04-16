@@ -1,125 +1,117 @@
 <template>
-  <div class="dashboard">
-    <h1>aireplay</h1>
+  <div>
+    <PageHeader title="Dashboard" />
 
-    <div v-if="loading" class="loading">Syncing providers…</div>
+    <div v-if="loading" class="text-muted-foreground py-8">Syncing providers…</div>
+    <div v-else-if="error" class="text-destructive py-8">{{ error }}</div>
 
     <template v-else>
-      <section class="providers">
-        <h2>Providers</h2>
-        <div class="provider-grid">
-          <div
-            v-for="provider in providers"
-            :key="provider.id"
-            class="provider-card"
-            :class="{ unavailable: !provider.available }"
-          >
-            <ProviderBadge :provider="provider.id" />
-            <div class="provider-stats">
-              <span>{{ provider.stats.conversations }} conversations</span>
-              <span>{{ provider.stats.memoryFiles }} memory files</span>
-            </div>
-            <span v-if="!provider.available" class="badge">not found</span>
-          </div>
-        </div>
-      </section>
+      <!-- Summary stats -->
+      <div class="grid grid-cols-3 gap-3 mb-6">
+        <Card v-for="stat in stats" :key="stat.label" size="sm" class="px-5">
+          <CardContent class="p-0">
+            <span class="text-3xl font-semibold leading-none">{{ stat.value }}</span>
+            <span class="text-xs text-muted-foreground block mt-1">{{ stat.label }}</span>
+          </CardContent>
+        </Card>
+      </div>
 
-      <section class="recent">
-        <h2>Recent Conversations</h2>
-        <div v-if="conversations.length === 0" class="empty">No conversations synced yet.</div>
-        <div v-else class="conversation-list">
-          <ConversationCard
-            v-for="convo in conversations.slice(0, 10)"
-            :key="convo.id"
-            :conversation="convo"
-          />
-        </div>
-      </section>
+      <!-- Two-column grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <!-- Left: provider breakdown -->
+        <Card class="px-5">
+          <CardHeader class="p-0">
+            <CardTitle class="text-sm text-muted-foreground">Providers</CardTitle>
+          </CardHeader>
+          <CardContent class="p-0">
+            <div class="flex flex-col">
+              <div
+                v-for="(provider, idx) in providers"
+                :key="provider.id"
+                class="flex justify-between items-center py-2"
+                :class="[
+                  { 'opacity-45': !provider.available },
+                  idx < providers.length - 1 ? 'border-b border-border' : '',
+                ]"
+              >
+                <div class="flex items-center gap-2">
+                  <ProviderBadge :provider="provider.id" />
+                  <Badge v-if="!provider.available" variant="outline" class="text-[0.65rem] h-4">not found</Badge>
+                </div>
+                <div class="flex items-baseline gap-1 text-xs">
+                  <span class="font-semibold">{{ provider.stats.conversations }}</span>
+                  <span class="text-muted-foreground mr-2">convos</span>
+                  <span class="font-semibold">{{ provider.stats.memoryFiles }}</span>
+                  <span class="text-muted-foreground">files</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <!-- Right: recent conversations -->
+        <Card class="px-5">
+          <CardHeader class="p-0">
+            <CardTitle class="text-sm text-muted-foreground">Recent Conversations</CardTitle>
+          </CardHeader>
+          <CardContent class="p-0">
+            <div v-if="conversations.length === 0" class="text-muted-foreground py-4">No conversations synced yet.</div>
+            <div v-else class="flex flex-col gap-2">
+              <ConversationCard
+                v-for="convo in conversations.slice(0, 8)"
+                :key="convo.id"
+                :conversation="convo"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import ConversationCard from "@/components/ConversationCard.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Conversation } from "@/types/conversation";
 import type { Provider } from "@/types/provider";
 
 const providers = ref<Provider[]>([]);
 const conversations = ref<Conversation[]>([]);
 const loading = ref(true);
+const error = ref<string | null>(null);
+
+const totalConversations = computed(() =>
+  providers.value.reduce((sum, p) => sum + p.stats.conversations, 0),
+);
+const totalMemoryFiles = computed(() =>
+  providers.value.reduce((sum, p) => sum + p.stats.memoryFiles, 0),
+);
+const availableProviders = computed(() => providers.value.filter((p) => p.available).length);
+
+const stats = computed(() => [
+  { value: totalConversations.value, label: "Conversations" },
+  { value: totalMemoryFiles.value, label: "Memory Files" },
+  { value: availableProviders.value, label: "Providers" },
+]);
 
 onMounted(async () => {
-  const [statusRes, convosRes] = await Promise.all([
-    fetch("/api/sync/status"),
-    fetch("/api/conversations?limit=10"),
-  ]);
+  try {
+    const [statusRes, convosRes] = await Promise.all([
+      fetch("/api/sync/status"),
+      fetch("/api/conversations?limit=10"),
+    ]);
 
-  providers.value = (await statusRes.json()).providers;
-  conversations.value = (await convosRes.json()).data;
-  loading.value = false;
+    providers.value = (await statusRes.json()).providers;
+    conversations.value = (await convosRes.json()).data;
+  } catch {
+    error.value = "Failed to load dashboard data. Is the server running?";
+  } finally {
+    loading.value = false;
+  }
 });
 </script>
-
-<style scoped>
-.dashboard h1 {
-  font-size: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-.dashboard h2 {
-  font-size: 1.1rem;
-  color: var(--color-text-muted);
-  margin-bottom: 0.75rem;
-}
-
-.provider-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 2rem;
-}
-
-.provider-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.provider-card.unavailable {
-  opacity: 0.5;
-}
-
-.provider-stats {
-  display: flex;
-  flex-direction: column;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.badge {
-  font-size: 0.7rem;
-  color: var(--color-text-muted);
-  background: var(--color-border);
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
-  align-self: flex-start;
-}
-
-.conversation-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.loading,
-.empty {
-  color: var(--color-text-muted);
-  padding: 2rem 0;
-}
-</style>

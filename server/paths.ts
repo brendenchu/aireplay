@@ -3,6 +3,22 @@ import { join } from "node:path";
 
 const HOME = homedir();
 
+function copilotStoragePath(): string {
+  switch (process.platform) {
+    case "darwin":
+      return join(HOME, "Library", "Application Support", "Code", "User", "workspaceStorage");
+    case "win32":
+      return join(
+        process.env.APPDATA ?? join(HOME, "AppData", "Roaming"),
+        "Code",
+        "User",
+        "workspaceStorage",
+      );
+    default:
+      return join(HOME, ".config", "Code", "User", "workspaceStorage");
+  }
+}
+
 export const PATHS = {
   claudeCode: {
     root: join(HOME, ".claude"),
@@ -12,14 +28,7 @@ export const PATHS = {
     settings: join(HOME, ".claude", "settings.json"),
   },
   copilot: {
-    workspaceStorage: join(
-      HOME,
-      "Library",
-      "Application Support",
-      "Code",
-      "User",
-      "workspaceStorage",
-    ),
+    workspaceStorage: copilotStoragePath(),
   },
   gemini: {
     root: join(HOME, ".gemini"),

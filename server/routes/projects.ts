@@ -5,6 +5,14 @@ import { cache } from "../cache";
 
 const app = new Hono();
 
+function encodeProjectId(path: string): string {
+  return Buffer.from(path).toString("base64url");
+}
+
+function decodeProjectId(id: string): string {
+  return Buffer.from(id, "base64url").toString();
+}
+
 function buildProjects(conversations: Conversation[], memoryFiles: MemoryFile[]): Project[] {
   const projectMap = new Map<string, Project>();
 
@@ -22,7 +30,7 @@ function buildProjects(conversations: Conversation[], memoryFiles: MemoryFile[])
       }
     } else {
       projectMap.set(convo.projectPath, {
-        id: convo.projectPath.replace(/\//g, "-"),
+        id: encodeProjectId(convo.projectPath),
         path: convo.projectPath,
         name: convo.projectName ?? convo.projectPath.split("/").pop() ?? convo.projectPath,
         providers: [convo.provider],
@@ -54,7 +62,7 @@ app.get("/", async (c) => {
 
 app.get("/:id", async (c) => {
   const id = c.req.param("id");
-  const projectPath = id.replace(/-/g, "/");
+  const projectPath = decodeProjectId(id);
 
   const allConversations = cache.get<Conversation[]>("conversations:list") ?? [];
   const allMemory = cache.get<MemoryFile[]>("memory:list") ?? [];

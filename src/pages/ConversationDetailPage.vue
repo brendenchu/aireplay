@@ -1,53 +1,48 @@
 <template>
-  <div class="conversation-detail">
-    <div v-if="loading" class="loading">Loading conversation…</div>
+  <div>
+    <div v-if="loading" class="text-muted-foreground py-8">Loading conversation…</div>
 
     <template v-else-if="conversation">
-      <header>
-        <RouterLink to="/conversations" class="back">&larr; Back</RouterLink>
-        <h1>{{ conversation.title }}</h1>
-        <div class="meta">
+      <PageHeader :title="conversation.title" back-to="/conversations">
+        <div class="flex gap-4 text-xs text-muted-foreground items-center mt-1">
           <ProviderBadge :provider="conversation.provider" />
           <span v-if="conversation.projectName">{{ conversation.projectName }}</span>
-          <span>{{ formatDate(conversation.startedAt) }}</span>
+          <span>{{ formatDate(conversation.startedAt, true) }}</span>
           <span>{{ conversation.messageCount }} messages</span>
         </div>
-      </header>
+      </PageHeader>
 
-      <div class="messages">
+      <div class="flex flex-col gap-4">
         <MessageBubble
-          v-for="msg in conversation.messages"
+          v-for="msg in visibleMessages"
           :key="msg.id"
           :message="msg"
         />
       </div>
     </template>
 
-    <div v-else class="empty">Conversation not found.</div>
+    <div v-else class="text-muted-foreground py-8">Conversation not found.</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import MessageBubble from "@/components/MessageBubble.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
 import type { ConversationDetail } from "@/types/conversation";
+import { formatDate } from "@/utils/format";
 
 const route = useRoute();
 const conversation = ref<ConversationDetail | null>(null);
 const loading = ref(true);
 
-function formatDate(iso: string): string {
-  if (!iso) return "";
-  return new Date(iso).toLocaleDateString("en-CA", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+const visibleMessages = computed(() =>
+  conversation.value?.messages.filter(
+    (m) => m.content.trim() || m.toolCalls?.length,
+  ) ?? [],
+);
 
 onMounted(async () => {
   const id = route.params.id as string;
@@ -58,44 +53,3 @@ onMounted(async () => {
   loading.value = false;
 });
 </script>
-
-<style scoped>
-.back {
-  color: var(--color-text-muted);
-  text-decoration: none;
-  font-size: 0.85rem;
-}
-
-.back:hover {
-  color: var(--color-accent);
-}
-
-header {
-  margin-bottom: 1.5rem;
-}
-
-header h1 {
-  font-size: 1.3rem;
-  margin: 0.5rem 0 0.5rem;
-}
-
-.meta {
-  display: flex;
-  gap: 1rem;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-  align-items: center;
-}
-
-.messages {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.loading,
-.empty {
-  color: var(--color-text-muted);
-  padding: 2rem 0;
-}
-</style>

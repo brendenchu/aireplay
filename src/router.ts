@@ -19,4 +19,5 @@ export const routes: RouteRecordRaw[] = [
   { path: "/memory/:id(.*)/edit", component: MemoryEditPage },
   { path: "/search", component: SearchPage },
   { path: "/settings", component: SettingsPage },
+  { path: "/:pathMatch(.*)*", redirect: "/" },
 ];

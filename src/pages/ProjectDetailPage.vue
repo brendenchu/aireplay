@@ -1,27 +1,25 @@
 <template>
-  <div class="project-detail">
-    <div v-if="loading" class="loading">Loading…</div>
+  <div>
+    <div v-if="loading" class="text-muted-foreground py-8">Loading…</div>
 
     <template v-else-if="project">
-      <header>
-        <RouterLink to="/projects" class="back">&larr; Back</RouterLink>
-        <h1>{{ project.name }}</h1>
-        <div class="meta">
-          <span class="path">{{ project.path }}</span>
+      <PageHeader :title="project.name" back-to="/projects">
+        <div class="flex gap-3 text-xs text-muted-foreground items-center mt-1">
+          <span class="font-mono">{{ project.path }}</span>
           <ProviderBadge v-for="p in project.providers" :key="p" :provider="p" />
         </div>
-      </header>
+      </PageHeader>
 
-      <section v-if="memoryFiles.length > 0">
-        <h2>Memory Files</h2>
-        <div class="memory-list">
+      <section v-if="memoryFiles.length > 0" class="mb-8">
+        <h3 class="text-base text-muted-foreground mb-3">Memory Files</h3>
+        <div class="flex flex-col gap-2">
           <MemoryFileCard v-for="mem in memoryFiles" :key="mem.id" :file="mem" />
         </div>
       </section>
 
-      <section>
-        <h2>Conversations ({{ conversations.length }})</h2>
-        <div class="conversation-list">
+      <section class="mb-8">
+        <h3 class="text-base text-muted-foreground mb-3">Conversations ({{ conversations.length }})</h3>
+        <div class="flex flex-col gap-2">
           <ConversationCard
             v-for="convo in conversations"
             :key="convo.id"
@@ -31,7 +29,7 @@
       </section>
     </template>
 
-    <div v-else class="empty">Project not found.</div>
+    <div v-else class="text-muted-foreground py-8">Project not found.</div>
   </div>
 </template>
 
@@ -40,6 +38,7 @@ import { onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import ConversationCard from "@/components/ConversationCard.vue";
 import MemoryFileCard from "@/components/MemoryFileCard.vue";
+import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
 import type { Conversation, Project } from "@/types/conversation";
 import type { MemoryFile } from "@/types/memory";
@@ -62,59 +61,3 @@ onMounted(async () => {
   loading.value = false;
 });
 </script>
-
-<style scoped>
-.back {
-  color: var(--color-text-muted);
-  text-decoration: none;
-  font-size: 0.85rem;
-}
-
-.back:hover {
-  color: var(--color-accent);
-}
-
-header {
-  margin-bottom: 1.5rem;
-}
-
-header h1 {
-  font-size: 1.3rem;
-  margin: 0.5rem 0 0.5rem;
-}
-
-.meta {
-  display: flex;
-  gap: 0.75rem;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-  align-items: center;
-}
-
-.path {
-  font-family: var(--font-mono);
-}
-
-section {
-  margin-bottom: 2rem;
-}
-
-section h2 {
-  font-size: 1.1rem;
-  color: var(--color-text-muted);
-  margin-bottom: 0.75rem;
-}
-
-.memory-list,
-.conversation-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.loading,
-.empty {
-  color: var(--color-text-muted);
-  padding: 2rem 0;
-}
-</style>

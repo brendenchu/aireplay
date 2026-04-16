@@ -1,22 +1,27 @@
 <template>
   <RouterLink
     :to="`/memory/${encodeURIComponent(file.id)}/edit`"
-    class="memory-file-card"
+    class="block no-underline"
   >
-    <div class="card-header">
-      <ProviderBadge :provider="file.provider" :small="true" />
-      <span class="size">{{ formatSize(file.sizeBytes) }}</span>
-    </div>
-    <div class="card-name">{{ file.name }}</div>
-    <div class="card-meta">
-      <span v-if="file.projectName">{{ file.projectName }}</span>
-      <span class="path">{{ file.relativePath }}</span>
-    </div>
+    <Card class="px-4 transition-colors hover:border-primary cursor-pointer" size="sm">
+      <CardContent class="p-0">
+        <div class="flex items-center justify-between mb-1">
+          <ProviderBadge :provider="file.provider" :small="true" />
+          <span class="text-xs text-muted-foreground">{{ formatSize(file.sizeBytes) }}</span>
+        </div>
+        <div class="font-medium font-mono text-foreground">{{ file.name }}</div>
+        <div class="flex gap-3 text-xs text-muted-foreground">
+          <span v-if="file.projectName">{{ file.projectName }}</span>
+          <span class="font-mono">{{ file.relativePath }}</span>
+        </div>
+      </CardContent>
+    </Card>
   </RouterLink>
 </template>
 
 <script setup lang="ts">
 import ProviderBadge from "@/components/ProviderBadge.vue";
+import { Card, CardContent } from "@/components/ui/card";
 import type { MemoryFile } from "@/types/memory";
 
 defineProps<{ file: MemoryFile }>();
@@ -26,49 +31,3 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 </script>
-
-<style scoped>
-.memory-file-card {
-  display: block;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  text-decoration: none;
-  color: var(--color-text);
-  transition: border-color 0.15s;
-}
-
-.memory-file-card:hover {
-  border-color: var(--color-accent);
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.25rem;
-}
-
-.size {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
-.card-name {
-  font-weight: 500;
-  font-family: var(--font-mono);
-  margin-bottom: 0.25rem;
-}
-
-.card-meta {
-  display: flex;
-  gap: 0.75rem;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.path {
-  font-family: var(--font-mono);
-}
-</style>

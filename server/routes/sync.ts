@@ -5,6 +5,7 @@ import type { MemoryFile } from "../../src/types/memory";
 import type { Provider, ProviderId } from "../../src/types/provider";
 import { cache } from "../cache";
 import * as claudeCode from "../parsers/claude-code";
+import * as codex from "../parsers/codex";
 import * as copilot from "../parsers/copilot";
 import * as gemini from "../parsers/gemini";
 import { PATHS } from "../paths";
@@ -58,7 +59,7 @@ async function runSync(providerFilter?: ProviderId) {
   if (shouldSync("gemini") && existsSync(PATHS.gemini.root)) {
     const s = Date.now();
     const conversations = await gemini.scanConversations();
-    const memoryFiles = await gemini.scanGeminiMdFiles([]);
+    const memoryFiles = await gemini.scanGeminiMdFiles([]); // TODO: pass discovered workspace paths
 
     const existing = cache.get<Conversation[]>("conversations:list") ?? [];
     cache.set("conversations:list", [...existing, ...conversations], Date.now());
@@ -66,6 +67,23 @@ async function runSync(providerFilter?: ProviderId) {
     cache.set("memory:list", [...existingMem, ...memoryFiles], Date.now());
 
     results.gemini = {
+      conversations: conversations.length,
+      memoryFiles: memoryFiles.length,
+      duration: Date.now() - s,
+    };
+  }
+
+  if (shouldSync("codex") && existsSync(PATHS.codex.root)) {
+    const s = Date.now();
+    const conversations = await codex.scanSessions();
+    const memoryFiles = await codex.scanMemoryFiles();
+
+    const existing = cache.get<Conversation[]>("conversations:list") ?? [];
+    cache.set("conversations:list", [...existing, ...conversations], Date.now());
+    const existingMem = cache.get<MemoryFile[]>("memory:list") ?? [];
+    cache.set("memory:list", [...existingMem, ...memoryFiles], Date.now());
+
+    results.codex = {
       conversations: conversations.length,
       memoryFiles: memoryFiles.length,
       duration: Date.now() - s,

@@ -3,7 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Local web app for browsing AI conversation history and memory files" />
+    <meta name="theme-color" content="#09090b" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>▶</text></svg>" />
     <title>aireplay</title>
+    <script>
+      // Prevent flash of wrong theme
+      (function() {
+        var t = localStorage.getItem('aireplay-theme') || 'system';
+        var d = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        if (d) document.documentElement.classList.add('dark');
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

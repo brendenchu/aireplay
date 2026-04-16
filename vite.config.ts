@@ -1,8 +1,10 @@
 import type { IncomingMessage } from "node:http";
 import { resolve } from "node:path";
 import { Readable } from "node:stream";
+import tailwindcss from "@tailwindcss/vite";
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vite";
+import pkg from "./package.json" with { type: "json" };
 import { createApp } from "./server";
 
 function collectBody(req: IncomingMessage): Promise<ArrayBuffer> {
@@ -16,6 +18,7 @@ function collectBody(req: IncomingMessage): Promise<ArrayBuffer> {
 
 export default defineConfig({
   plugins: [
+    tailwindcss(),
     vue(),
     {
       name: "aireplay-api",
@@ -137,6 +140,10 @@ export default defineConfig({
     },
   },
   server: {
+    host: process.env.HOST || "localhost",
     port: 4123,
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
   },
 });

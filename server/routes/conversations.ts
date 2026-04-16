@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Conversation } from "../../src/types/conversation";
 import { cache } from "../cache";
 import * as claudeCode from "../parsers/claude-code";
+import * as codex from "../parsers/codex";
 import * as copilot from "../parsers/copilot";
 import * as gemini from "../parsers/gemini";
 
@@ -67,6 +68,9 @@ app.get("/:id", async (c) => {
     detail = await copilot.parseSession(convo.filePath);
   } else if (provider === "gemini") {
     detail = await gemini.parseConversation(convo.filePath);
+  } else if (provider === "codex") {
+    // Codex stores all sessions in one file — parse by session ID
+    detail = await codex.parseSession(rest.join(":"));
   }
 
   if (!detail) {

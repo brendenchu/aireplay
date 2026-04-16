@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import type { MemoryFile } from "../../src/types/memory";
 import { cache } from "../cache";
 import * as claudeCode from "../parsers/claude-code";
+import * as codex from "../parsers/codex";
 import * as gemini from "../parsers/gemini";
 import { PATHS } from "../paths";
 
@@ -13,15 +14,19 @@ async function getAllMemoryFiles(): Promise<MemoryFile[]> {
   const cached = cache.get<MemoryFile[]>("memory:list");
   if (cached) return cached;
 
-  const [cc, gm] = await Promise.all([claudeCode.scanMemoryFiles(), gemini.scanGeminiMdFiles([])]);
+  const [cc, gm, cx] = await Promise.all([
+    claudeCode.scanMemoryFiles(),
+    gemini.scanGeminiMdFiles([]), // TODO: pass discovered workspace paths for per-project GEMINI.md
+    codex.scanMemoryFiles(),
+  ]);
 
-  const all = [...cc, ...gm];
+  const all = [...cc, ...gm, ...cx];
   cache.set("memory:list", all, Date.now());
   return all;
 }
 
 // Known provider root directories for path traversal guard
-const ALLOWED_ROOTS = [PATHS.claudeCode.root, PATHS.gemini.root];
+const ALLOWED_ROOTS = [PATHS.claudeCode.root, PATHS.gemini.root, PATHS.codex.root];
 
 function isWithinAllowedRoot(filePath: string): boolean {
   return ALLOWED_ROOTS.some((root) => filePath.startsWith(`${root}/`));

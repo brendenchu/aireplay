@@ -1,53 +1,76 @@
 <template>
-  <div class="memory-edit-page">
-    <div v-if="loading" class="loading">Loading…</div>
+  <div>
+    <div v-if="loading" class="text-muted-foreground py-8">Loading…</div>
 
     <template v-else-if="file">
-      <header>
-        <RouterLink to="/memory" class="back">&larr; Back</RouterLink>
-        <h1>{{ file.name }}</h1>
-        <div class="meta">
+      <PageHeader :title="file.name" back-to="/memory">
+        <div class="flex gap-3 text-xs text-muted-foreground items-center mt-1">
           <ProviderBadge :provider="file.provider" />
           <span v-if="file.projectName">{{ file.projectName }}</span>
-          <span class="path">{{ file.relativePath }}</span>
+          <span class="font-mono">{{ file.relativePath }}</span>
         </div>
-      </header>
+      </PageHeader>
 
-      <div class="editor-area">
-        <textarea
-          v-model="content"
-          :class="{ modified: content !== file.content }"
-          spellcheck="false"
-        ></textarea>
+      <div v-if="frontmatter.length" class="flex flex-col gap-1 text-xs text-muted-foreground mb-3">
+        <div v-for="({ key, value }) in frontmatter" :key="key">
+          <span class="font-medium text-foreground">{{ key }}</span>
+          <span class="ml-1">{{ value }}</span>
+        </div>
       </div>
 
-      <div class="actions">
-        <button
+      <Tabs default-value="edit" class="mb-4">
+        <TabsList>
+          <TabsTrigger value="edit">Edit</TabsTrigger>
+          <TabsTrigger value="preview">Preview</TabsTrigger>
+        </TabsList>
+        <TabsContent value="edit">
+          <Textarea
+            v-model="content"
+            spellcheck="false"
+            class="h-[60vh] font-mono text-sm leading-relaxed resize-none overflow-y-auto"
+            :class="{ 'border-primary ring-1 ring-primary/50': content !== file.content }"
+          />
+        </TabsContent>
+        <TabsContent value="preview">
+          <div
+            class="prose-bubble h-[60vh] rounded-md border border-border bg-card p-4 text-sm leading-relaxed overflow-y-auto"
+            v-html="previewHtml"
+          ></div>
+        </TabsContent>
+      </Tabs>
+
+      <div class="flex gap-3 items-center">
+        <Button
           @click="save"
           :disabled="saving || content === file.content"
-          class="save-btn"
         >
           {{ saving ? 'Saving…' : 'Save' }}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
           @click="content = file.content"
           :disabled="content === file.content"
-          class="reset-btn"
         >
           Reset
-        </button>
-        <span v-if="saveMessage" class="save-message">{{ saveMessage }}</span>
+        </Button>
+        <span v-if="saveMessage" class="text-sm text-primary">{{ saveMessage }}</span>
       </div>
     </template>
 
-    <div v-else class="empty">Memory file not found.</div>
+    <div v-else class="text-muted-foreground py-8">Memory file not found.</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { useRoute } from "vue-router";
+import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import type { MemoryFile } from "@/types/memory";
 
 const route = useRoute();
@@ -56,6 +79,25 @@ const content = ref("");
 const loading = ref(true);
 const saving = ref(false);
 const saveMessage = ref("");
+
+const frontmatter = computed<{ key: string; value: string }[]>(() => {
+  const m = content.value.match(/^---\n([\s\S]*?)\n---/);
+  if (!m) return [];
+  return m[1]
+    .split("\n")
+    .map((line) => {
+      const idx = line.indexOf(":");
+      if (idx === -1) return null;
+      return { key: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() };
+    })
+    .filter((entry): entry is { key: string; value: string } => entry !== null && entry.key !== "");
+});
+
+const previewHtml = computed(() => {
+  const stripped = content.value.replace(/^---\n[\s\S]*?\n---\n?/, "");
+  const raw = marked.parse(stripped, { async: false }) as string;
+  return DOMPurify.sanitize(raw);
+});
 
 onMounted(async () => {
   const id = route.params.id as string;
@@ -90,105 +132,3 @@ async function save() {
   saving.value = false;
 }
 </script>
-
-<style scoped>
-.back {
-  color: var(--color-text-muted);
-  text-decoration: none;
-  font-size: 0.85rem;
-}
-
-.back:hover {
-  color: var(--color-accent);
-}
-
-header {
-  margin-bottom: 1rem;
-}
-
-header h1 {
-  font-size: 1.3rem;
-  margin: 0.5rem 0 0.5rem;
-}
-
-.meta {
-  display: flex;
-  gap: 0.75rem;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-  align-items: center;
-}
-
-.path {
-  font-family: var(--font-mono);
-}
-
-.editor-area {
-  margin-bottom: 1rem;
-}
-
-textarea {
-  width: 100%;
-  min-height: 400px;
-  background: var(--color-surface);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 1rem;
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  line-height: 1.6;
-  resize: vertical;
-}
-
-textarea.modified {
-  border-color: var(--color-accent);
-}
-
-.actions {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.save-btn,
-.reset-btn {
-  padding: 0.5rem 1.25rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  border: 1px solid var(--color-border);
-}
-
-.save-btn {
-  background: var(--color-accent);
-  color: white;
-  border-color: var(--color-accent);
-}
-
-.save-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.reset-btn {
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.reset-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.save-message {
-  font-size: 0.8rem;
-  color: var(--color-accent);
-}
-
-.loading,
-.empty {
-  color: var(--color-text-muted);
-  padding: 2rem 0;
-}
-</style>

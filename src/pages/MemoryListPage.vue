@@ -1,20 +1,24 @@
 <template>
-  <div class="memory-list-page">
-    <h1>Memory Files</h1>
+  <div>
+    <PageHeader title="Memory Files">
+      <template #actions>
+        <Select v-model="providerFilter">
+          <SelectTrigger class="w-48">
+            <SelectValue placeholder="All providers" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All providers</SelectItem>
+            <SelectItem v-for="(name, id) in PROVIDER_NAMES" :key="id" :value="id">{{ name }}</SelectItem>
+          </SelectContent>
+        </Select>
+      </template>
+    </PageHeader>
 
-    <div class="filters">
-      <select v-model="providerFilter">
-        <option value="">All providers</option>
-        <option value="claude-code">Claude Code</option>
-        <option value="gemini">Gemini CLI</option>
-      </select>
-    </div>
-
-    <div v-if="loading" class="loading">Loading…</div>
+    <div v-if="loading" class="text-muted-foreground py-8">Loading…</div>
 
     <template v-else>
-      <div v-if="files.length === 0" class="empty">No memory files found.</div>
-      <div v-else class="list">
+      <div v-if="files.length === 0" class="text-muted-foreground py-8">No memory files found.</div>
+      <div v-else class="flex flex-col gap-2">
         <MemoryFileCard v-for="file in filtered" :key="file.id" :file="file" />
       </div>
     </template>
@@ -24,52 +28,34 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import MemoryFileCard from "@/components/MemoryFileCard.vue";
+import PageHeader from "@/components/PageHeader.vue";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { MemoryFile } from "@/types/memory";
+import { PROVIDER_NAMES } from "@/types/provider";
 
 const files = ref<MemoryFile[]>([]);
 const loading = ref(true);
-const providerFilter = ref("");
+const providerFilter = ref("all");
 
 const filtered = computed(() => {
-  if (!providerFilter.value) return files.value;
+  if (providerFilter.value === "all") return files.value;
   return files.value.filter((f) => f.provider === providerFilter.value);
 });
 
 onMounted(async () => {
-  const res = await fetch("/api/memory");
-  files.value = (await res.json()).data;
-  loading.value = false;
+  try {
+    const res = await fetch("/api/memory");
+    files.value = (await res.json()).data;
+  } catch {
+    // leave empty
+  } finally {
+    loading.value = false;
+  }
 });
 </script>
-
-<style scoped>
-.memory-list-page h1 {
-  font-size: 1.5rem;
-  margin-bottom: 1rem;
-}
-
-.filters {
-  margin-bottom: 1rem;
-}
-
-.filters select {
-  background: var(--color-surface);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  padding: 0.4rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
-}
-
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.loading,
-.empty {
-  color: var(--color-text-muted);
-  padding: 2rem 0;
-}
-</style>

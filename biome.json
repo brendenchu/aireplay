@@ -14,7 +14,8 @@
       "correctness": {
         "noUnusedImports": "off",
         "noUnusedVariables": "off",
-        "noUnusedFunctionParameters": "off"
+        "noUnusedFunctionParameters": "off",
+        "noVueDuplicateKeys": "off"
       }
     }
   },
