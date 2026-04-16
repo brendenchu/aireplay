@@ -1,0 +1,61 @@
+{
+  "name": "aireplay",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Local web app for browsing, searching, and editing AI conversation history and memory files",
+  "author": "Brenden Chu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brendenchu/aireplay.git"
+  },
+  "homepage": "https://github.com/brendenchu/aireplay#readme",
+  "bugs": {
+    "url": "https://github.com/brendenchu/aireplay/issues"
+  },
+  "keywords": [
+    "ai",
+    "llm",
+    "claude",
+    "copilot",
+    "gemini",
+    "codex",
+    "conversations",
+    "memory",
+    "local",
+    "browser"
+  ],
+  "bin": {
+    "aireplay": "./bin/aireplay.mjs"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build && node build-server.mjs",
+    "preview": "vite preview",
+    "lint": "biome check .",
+    "lint:fix": "biome check --fix .",
+    "format": "biome format --write .",
+    "typecheck": "vue-tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "hono": "^4.12.14",
+    "minisearch": "^7.2.0",
+    "vue": "^3.5.32",
+    "vue-router": "^5.0.4"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.12",
+    "@types/node": "^25.6.0",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.8",
+    "vue-tsc": "^3.2.6"
+  }
+}

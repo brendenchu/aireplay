@@ -1,0 +1,89 @@
+import { Hono } from "hono";
+import MiniSearch from "minisearch";
+import type { Conversation } from "../../src/types/conversation";
+import type { MemoryFile } from "../../src/types/memory";
+import type { SearchResult } from "../../src/types/search";
+import { cache } from "../cache";
+
+const app = new Hono();
+
+function getOrBuildIndex(): MiniSearch {
+  const cached = cache.get<MiniSearch>("search:index");
+  if (cached) return cached;
+
+  const index = new MiniSearch({
+    fields: ["title", "content", "name"],
+    storeFields: ["type", "provider", "title"],
+    idField: "id",
+  });
+
+  const conversations = cache.get<Conversation[]>("conversations:list") ?? [];
+  const memoryFiles = cache.get<MemoryFile[]>("memory:list") ?? [];
+
+  // Index conversations (title only for now — full content indexing deferred)
+  for (const convo of conversations) {
+    index.add({
+      id: convo.id,
+      type: "conversation",
+      provider: convo.provider,
+      title: convo.title,
+      content: "",
+      name: "",
+    });
+  }
+
+  // Index memory files (name + content)
+  for (const mem of memoryFiles) {
+    index.add({
+      id: mem.id,
+      type: "memory",
+      provider: mem.provider,
+      title: mem.name,
+      content: mem.content,
+      name: mem.name,
+    });
+  }
+
+  cache.set("search:index", index, Date.now());
+  return index;
+}
+
+app.get("/", (c) => {
+  const q = c.req.query("q");
+  if (!q) {
+    return c.json({ results: [] });
+  }
+
+  const provider = c.req.query("provider");
+  const type = c.req.query("type") ?? "all";
+  const limit = parseInt(c.req.query("limit") ?? "20", 10);
+
+  try {
+    const index = getOrBuildIndex();
+    let rawResults = index.search(q, { fuzzy: 0.2 });
+
+  if (provider) {
+    rawResults = rawResults.filter((r) => r.provider === provider);
+  }
+  if (type !== "all") {
+    rawResults = rawResults.filter((r) => r.type === type);
+  }
+
+  const results: SearchResult[] = rawResults.slice(0, limit).map((r) => ({
+    type: r.type as "conversation" | "memory",
+    id: r.id,
+    title: r.title ?? "",
+    provider: r.provider,
+    excerpt: "",
+    score: r.score,
+    matchedField: r.match ? Object.keys(r.match).join(", ") : "",
+  }));
+
+  return c.json({ results });
+  } catch (err) {
+    console.error("[search] error:", err);
+    return c.json({ error: "Search failed" }, 500);
+  }
+});
+
+export default app;
