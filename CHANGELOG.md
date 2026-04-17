@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-16
+
+### Added
+
+- Dashboard now shows a combined activity feed (conversations + memory files) sorted by date
+- Provider filter dropdown on Dashboard, Conversations, and Memory pages
+- Color-coded left borders on cards: blue for conversations, amber for memory files
+
+### Changed
+
+- Conversations and memory pages sort by date across all providers instead of grouping by provider
+
+### Fixed
+
+- Copilot parser now handles the incremental changelog JSONL format used by newer VS Code Copilot sessions (kind 0/1/2 operations), which were previously invisible
+- Copilot session titles now use `customTitle` when available instead of truncating the first message
+- Copilot message extraction supports both old format (plain strings) and new format (`{text}` objects for user messages, array-of-parts for assistant responses)
+
 ## [0.1.0] - 2026-04-16
 
 ### Added

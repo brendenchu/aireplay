@@ -17,7 +17,7 @@
     <div v-if="loading" class="text-muted-foreground py-8">Loading…</div>
 
     <template v-else>
-      <div v-if="files.length === 0" class="text-muted-foreground py-8">No memory files found.</div>
+      <div v-if="filtered.length === 0" class="text-muted-foreground py-8">No memory files found.</div>
       <div v-else class="flex flex-col gap-2">
         <MemoryFileCard v-for="file in filtered" :key="file.id" :file="file" />
       </div>
@@ -44,8 +44,10 @@ const loading = ref(true);
 const providerFilter = ref("all");
 
 const filtered = computed(() => {
-  if (providerFilter.value === "all") return files.value;
-  return files.value.filter((f) => f.provider === providerFilter.value);
+  const list = providerFilter.value === "all"
+    ? files.value
+    : files.value.filter((f) => f.provider === providerFilter.value);
+  return [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 });
 
 onMounted(async () => {

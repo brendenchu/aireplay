@@ -1,6 +1,18 @@
 <template>
   <div>
-    <PageHeader title="Dashboard" />
+    <PageHeader title="Dashboard">
+      <template #actions>
+        <Select v-model="providerFilter">
+          <SelectTrigger class="w-48">
+            <SelectValue placeholder="All providers" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All providers</SelectItem>
+            <SelectItem v-for="(name, id) in PROVIDER_NAMES" :key="id" :value="id">{{ name }}</SelectItem>
+          </SelectContent>
+        </Select>
+      </template>
+    </PageHeader>
 
     <div v-if="loading" class="text-muted-foreground py-8">Syncing providers…</div>
     <div v-else-if="error" class="text-destructive py-8">{{ error }}</div>
@@ -49,19 +61,18 @@
           </CardContent>
         </Card>
 
-        <!-- Right: recent conversations -->
+        <!-- Right: recent activity (conversations + memory files) -->
         <Card class="px-5">
           <CardHeader class="p-0">
-            <CardTitle class="text-sm text-muted-foreground">Recent Conversations</CardTitle>
+            <CardTitle class="text-sm text-muted-foreground">Recent Activity</CardTitle>
           </CardHeader>
           <CardContent class="p-0">
-            <div v-if="conversations.length === 0" class="text-muted-foreground py-4">No conversations synced yet.</div>
+            <div v-if="feed.length === 0" class="text-muted-foreground py-4">No activity yet.</div>
             <div v-else class="flex flex-col gap-2">
-              <ConversationCard
-                v-for="convo in conversations.slice(0, 8)"
-                :key="convo.id"
-                :conversation="convo"
-              />
+              <template v-for="item in feed.slice(0, 10)" :key="item.type + ':' + item.data.id">
+                <ConversationCard v-if="item.type === 'conversation'" :conversation="item.data" />
+                <MemoryFileCard v-else :file="item.data" />
+              </template>
             </div>
           </CardContent>
         </Card>
@@ -73,17 +84,33 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import ConversationCard from "@/components/ConversationCard.vue";
+import MemoryFileCard from "@/components/MemoryFileCard.vue";
 import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Conversation } from "@/types/conversation";
+import type { MemoryFile } from "@/types/memory";
 import type { Provider } from "@/types/provider";
+import { PROVIDER_NAMES } from "@/types/provider";
+
+type FeedItem =
+  | { type: "conversation"; data: Conversation; date: string }
+  | { type: "memory"; data: MemoryFile; date: string };
 
 const providers = ref<Provider[]>([]);
 const conversations = ref<Conversation[]>([]);
+const memoryFiles = ref<MemoryFile[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
+const providerFilter = ref("all");
 
 const totalConversations = computed(() =>
   providers.value.reduce((sum, p) => sum + p.stats.conversations, 0),
@@ -99,15 +126,32 @@ const stats = computed(() => [
   { value: availableProviders.value, label: "Providers" },
 ]);
 
+const feed = computed<FeedItem[]>(() => {
+  const items: FeedItem[] = [];
+
+  for (const c of conversations.value) {
+    if (providerFilter.value !== "all" && c.provider !== providerFilter.value) continue;
+    items.push({ type: "conversation", data: c, date: c.lastMessageAt || c.startedAt });
+  }
+  for (const m of memoryFiles.value) {
+    if (providerFilter.value !== "all" && m.provider !== providerFilter.value) continue;
+    items.push({ type: "memory", data: m, date: m.updatedAt });
+  }
+
+  return items.sort((a, b) => b.date.localeCompare(a.date));
+});
+
 onMounted(async () => {
   try {
-    const [statusRes, convosRes] = await Promise.all([
+    const [statusRes, convosRes, memoryRes] = await Promise.all([
       fetch("/api/sync/status"),
-      fetch("/api/conversations?limit=10"),
+      fetch("/api/conversations?limit=200"),
+      fetch("/api/memory"),
     ]);
 
     providers.value = (await statusRes.json()).providers;
     conversations.value = (await convosRes.json()).data;
+    memoryFiles.value = (await memoryRes.json()).data;
   } catch {
     error.value = "Failed to load dashboard data. Is the server running?";
   } finally {

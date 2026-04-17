@@ -3,7 +3,7 @@
     :to="`/memory/${encodeURIComponent(file.id)}/edit`"
     class="block no-underline"
   >
-    <Card class="px-4 transition-colors hover:border-primary cursor-pointer" size="sm">
+    <Card class="px-4 transition-colors hover:border-primary cursor-pointer border-l-2 border-l-amber-400/60" size="sm">
       <CardContent class="p-0">
         <div class="flex items-center justify-between mb-1">
           <ProviderBadge :provider="file.provider" :small="true" />

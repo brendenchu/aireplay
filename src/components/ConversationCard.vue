@@ -3,7 +3,7 @@
     :to="`/conversations/${encodeURIComponent(conversation.id)}`"
     class="block no-underline"
   >
-    <Card class="px-4 transition-colors hover:border-primary cursor-pointer" size="sm">
+    <Card class="px-4 transition-colors hover:border-primary cursor-pointer border-l-2 border-l-blue-400/60" size="sm">
       <CardContent class="p-0">
         <div class="flex items-center justify-between mb-1">
           <ProviderBadge :provider="conversation.provider" :small="true" />
