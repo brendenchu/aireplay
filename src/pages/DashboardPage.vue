@@ -98,19 +98,19 @@ import {
 } from "@/components/ui/select";
 import type { Conversation } from "@/types/conversation";
 import type { MemoryFile } from "@/types/memory";
-import type { Provider } from "@/types/provider";
+import type { ProviderFilter, ProviderStatus } from "@/types/provider";
 import { PROVIDER_NAMES } from "@/types/provider";
 
 type FeedItem =
   | { type: "conversation"; data: Conversation; date: string }
   | { type: "memory"; data: MemoryFile; date: string };
 
-const providers = ref<Provider[]>([]);
+const providers = ref<ProviderStatus[]>([]);
 const conversations = ref<Conversation[]>([]);
 const memoryFiles = ref<MemoryFile[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
-const providerFilter = ref("all");
+const providerFilter = ref<ProviderFilter>("all");
 
 const totalConversations = computed(() =>
   providers.value.reduce((sum, p) => sum + p.stats.conversations, 0),

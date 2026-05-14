@@ -1,18 +1,23 @@
 <script setup lang="ts">
-import type { TabsListProps } from 'reka-ui'
-import type { HTMLAttributes } from 'vue'
-import { reactiveOmit } from '@vueuse/core'
-import { TabsList } from 'reka-ui'
-import { cn } from '@/lib/utils'
+import { reactiveOmit } from "@vueuse/core";
+import type { TabsListProps } from "reka-ui";
+import { TabsList } from "reka-ui";
+import type { HTMLAttributes } from "vue";
+import { cn } from "@/lib/utils";
 
-const props = withDefaults(defineProps<TabsListProps & {
-  class?: HTMLAttributes['class']
-  variant?: 'default' | 'line'
-}>(), {
-  variant: 'default',
-})
+const props = withDefaults(
+  defineProps<
+    TabsListProps & {
+      class?: HTMLAttributes["class"];
+      variant?: "default" | "line";
+    }
+  >(),
+  {
+    variant: "default",
+  },
+);
 
-const delegatedProps = reactiveOmit(props, 'class', 'variant')
+const delegatedProps = reactiveOmit(props, "class", "variant");
 </script>
 
 <template>

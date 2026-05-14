@@ -80,9 +80,9 @@ import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { type Theme, useTheme } from "@/composables/useTheme";
 import { type AccentColor, accentPalettes, useAccentColor } from "@/composables/useAccentColor";
-import type { Provider } from "@/types/provider";
+import { type Theme, useTheme } from "@/composables/useTheme";
+import type { ProviderStatus } from "@/types/provider";
 
 const { theme } = useTheme();
 const { accentColor } = useAccentColor();
@@ -92,7 +92,7 @@ const themeOptions: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: "dark", label: "Dark", icon: Moon },
 ];
 
-const providers = ref<Provider[]>([]);
+const providers = ref<ProviderStatus[]>([]);
 const syncing = ref(false);
 const version = __APP_VERSION__;
 interface SyncProviderStats {

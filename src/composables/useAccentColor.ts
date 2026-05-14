@@ -11,17 +11,61 @@ export interface AccentPalette {
 }
 
 export const accentPalettes: Record<AccentColor, AccentPalette> = {
-  indigo: { label: "Indigo", light: "#4f46e5", lightForeground: "#ffffff", dark: "#818cf8", darkForeground: "#1e1b4b" },
-  violet: { label: "Violet", light: "#7c3aed", lightForeground: "#ffffff", dark: "#a78bfa", darkForeground: "#1e1b4b" },
-  blue: { label: "Blue", light: "#2563eb", lightForeground: "#ffffff", dark: "#60a5fa", darkForeground: "#172554" },
-  amber: { label: "Amber", light: "#d97706", lightForeground: "#ffffff", dark: "#fbbf24", darkForeground: "#451a03" },
-  rose: { label: "Rose", light: "#e11d48", lightForeground: "#ffffff", dark: "#fb7185", darkForeground: "#1c1917" },
-  emerald: { label: "Emerald", light: "#059669", lightForeground: "#ffffff", dark: "#34d399", darkForeground: "#022c22" },
-  cyan: { label: "Cyan", light: "#0891b2", lightForeground: "#ffffff", dark: "#22d3ee", darkForeground: "#083344" },
+  indigo: {
+    label: "Indigo",
+    light: "#4f46e5",
+    lightForeground: "#ffffff",
+    dark: "#818cf8",
+    darkForeground: "#1e1b4b",
+  },
+  violet: {
+    label: "Violet",
+    light: "#7c3aed",
+    lightForeground: "#ffffff",
+    dark: "#a78bfa",
+    darkForeground: "#1e1b4b",
+  },
+  blue: {
+    label: "Blue",
+    light: "#2563eb",
+    lightForeground: "#ffffff",
+    dark: "#60a5fa",
+    darkForeground: "#172554",
+  },
+  amber: {
+    label: "Amber",
+    light: "#d97706",
+    lightForeground: "#ffffff",
+    dark: "#fbbf24",
+    darkForeground: "#451a03",
+  },
+  rose: {
+    label: "Rose",
+    light: "#e11d48",
+    lightForeground: "#ffffff",
+    dark: "#fb7185",
+    darkForeground: "#1c1917",
+  },
+  emerald: {
+    label: "Emerald",
+    light: "#059669",
+    lightForeground: "#ffffff",
+    dark: "#34d399",
+    darkForeground: "#022c22",
+  },
+  cyan: {
+    label: "Cyan",
+    light: "#0891b2",
+    lightForeground: "#ffffff",
+    dark: "#22d3ee",
+    darkForeground: "#083344",
+  },
 };
 
 const STORAGE_KEY = "aireplay-accent";
-const accentColor = ref<AccentColor>((localStorage.getItem(STORAGE_KEY) as AccentColor) ?? "indigo");
+const accentColor = ref<AccentColor>(
+  (localStorage.getItem(STORAGE_KEY) as AccentColor) ?? "indigo",
+);
 
 function applyAccent(color: AccentColor) {
   const palette = accentPalettes[color];

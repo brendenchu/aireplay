@@ -37,17 +37,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Conversation } from "@/types/conversation";
+import type { ProviderFilter } from "@/types/provider";
 import { PROVIDER_NAMES } from "@/types/provider";
 
 const conversations = ref<Conversation[]>([]);
 const loading = ref(true);
-const providerFilter = ref("all");
+const providerFilter = ref<ProviderFilter>("all");
 
 const filtered = computed(() => {
-  const list = providerFilter.value === "all"
-    ? conversations.value
-    : conversations.value.filter((c) => c.provider === providerFilter.value);
-  return [...list].sort((a, b) => (b.lastMessageAt || b.startedAt).localeCompare(a.lastMessageAt || a.startedAt));
+  const list =
+    providerFilter.value === "all"
+      ? conversations.value
+      : conversations.value.filter((c) => c.provider === providerFilter.value);
+  return [...list].sort((a, b) =>
+    (b.lastMessageAt || b.startedAt).localeCompare(a.lastMessageAt || a.startedAt),
+  );
 });
 
 async function load() {

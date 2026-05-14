@@ -37,16 +37,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { MemoryFile } from "@/types/memory";
+import type { ProviderFilter } from "@/types/provider";
 import { PROVIDER_NAMES } from "@/types/provider";
 
 const files = ref<MemoryFile[]>([]);
 const loading = ref(true);
-const providerFilter = ref("all");
+const providerFilter = ref<ProviderFilter>("all");
 
 const filtered = computed(() => {
-  const list = providerFilter.value === "all"
-    ? files.value
-    : files.value.filter((f) => f.provider === providerFilter.value);
+  const list =
+    providerFilter.value === "all"
+      ? files.value
+      : files.value.filter((f) => f.provider === providerFilter.value);
   return [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 });
 

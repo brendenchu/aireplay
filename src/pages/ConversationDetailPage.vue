@@ -38,10 +38,8 @@ const route = useRoute();
 const conversation = ref<ConversationDetail | null>(null);
 const loading = ref(true);
 
-const visibleMessages = computed(() =>
-  conversation.value?.messages.filter(
-    (m) => m.content.trim() || m.toolCalls?.length,
-  ) ?? [],
+const visibleMessages = computed(
+  () => conversation.value?.messages.filter((m) => m.content.trim() || m.toolCalls?.length) ?? [],
 );
 
 onMounted(async () => {

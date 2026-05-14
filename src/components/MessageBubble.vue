@@ -38,10 +38,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
-import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { ChevronRight } from "lucide-vue-next";
+import { marked } from "marked";
+import { computed } from "vue";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { Message } from "@/types/conversation";
 
@@ -64,13 +64,14 @@ interface ContextBlock {
 
 const contextBlocks = computed<ContextBlock[]>(() => {
   const blocks: ContextBlock[] = [];
-  let m: RegExpExecArray | null;
   const re = new RegExp(CUSTOM_TAG_RE.source, "g");
-  while ((m = re.exec(props.message.content)) !== null) {
+  let m = re.exec(props.message.content);
+  while (m !== null) {
     blocks.push({
       label: m[1].replace(/_/g, " "),
       body: m[2].trim(),
     });
+    m = re.exec(props.message.content);
   }
   return blocks;
 });
@@ -80,10 +81,7 @@ function stripCustomTags(text: string): string {
 }
 
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 const renderedContent = computed(() => {
@@ -95,4 +93,3 @@ const renderedContent = computed(() => {
   return escapeHtml(content);
 });
 </script>
-
