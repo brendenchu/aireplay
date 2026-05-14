@@ -5,6 +5,13 @@ import { cache } from "../cache";
 import { findParserById, PARSERS } from "../parsers";
 import { compareLastMessageDesc } from "../parsers/_shared";
 
+function parseIntInRange(raw: string | undefined, fallback: number, min: number, max: number) {
+  if (raw === undefined) return fallback;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < min || n > max) return null;
+  return n;
+}
+
 const app = new Hono();
 
 async function getAllConversations(): Promise<Conversation[]> {
@@ -21,9 +28,12 @@ async function getAllConversations(): Promise<Conversation[]> {
 app.get("/", async (c) => {
   const provider = c.req.query("provider");
   const project = c.req.query("project");
-  const limit = parseInt(c.req.query("limit") ?? "50", 10);
-  const offset = parseInt(c.req.query("offset") ?? "0", 10);
+  const limit = parseIntInRange(c.req.query("limit"), 50, 1, 200);
+  const offset = parseIntInRange(c.req.query("offset"), 0, 0, Number.MAX_SAFE_INTEGER);
   const sort = c.req.query("sort") ?? "recent";
+
+  if (limit === null) return c.json({ error: "Invalid limit (1-200)" }, 400);
+  if (offset === null) return c.json({ error: "Invalid offset" }, 400);
 
   let conversations = await getAllConversations();
 

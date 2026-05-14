@@ -78,10 +78,14 @@ app.get("/", (c) => {
 
   const provider = c.req.query("provider");
   const type = c.req.query("type") ?? "all";
-  const limit = parseInt(c.req.query("limit") ?? "20", 10);
+  const limitRaw = c.req.query("limit");
+  const limit = limitRaw === undefined ? 20 : Number.parseInt(limitRaw, 10);
 
   if (provider && !isProviderId(provider)) {
     return c.json({ error: "Unknown provider" }, 400);
+  }
+  if (!Number.isFinite(limit) || limit < 1 || limit > 200) {
+    return c.json({ error: "Invalid limit (1-200)" }, 400);
   }
 
   try {
