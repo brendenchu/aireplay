@@ -64,8 +64,8 @@
 <script setup lang="ts">
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import { computed, onMounted, ref } from "vue";
-import { useRoute } from "vue-router";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeRouteLeave, useRoute } from "vue-router";
 import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,25 @@ const content = ref("");
 const loading = ref(true);
 const saving = ref(false);
 const saveMessage = ref("");
+
+const hasUnsavedChanges = computed(
+  () => file.value !== null && content.value !== file.value.content,
+);
+
+function beforeUnloadHandler(event: BeforeUnloadEvent) {
+  if (!hasUnsavedChanges.value) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+
+onBeforeRouteLeave(() => {
+  if (!hasUnsavedChanges.value) return true;
+  return window.confirm("You have unsaved changes. Leave anyway?");
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("beforeunload", beforeUnloadHandler);
+});
 
 const frontmatter = computed<{ key: string; value: string }[]>(() => {
   const m = content.value.match(/^---\n([\s\S]*?)\n---/);
@@ -100,6 +119,8 @@ const previewHtml = computed(() => {
 });
 
 onMounted(async () => {
+  window.addEventListener("beforeunload", beforeUnloadHandler);
+
   const id = route.params.id as string;
   const res = await fetch(`/api/memory/${encodeURIComponent(id)}`);
   if (res.ok) {
