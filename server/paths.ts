@@ -2,6 +2,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const HOME = homedir();
+const GEMINI_ROOT = process.env.GEMINI_CLI_HOME ?? join(HOME, ".gemini");
 
 function copilotStoragePath(): string {
   switch (process.platform) {
@@ -31,11 +32,11 @@ export const PATHS = {
     workspaceStorage: copilotStoragePath(),
   },
   gemini: {
-    root: join(HOME, ".gemini"),
-    settings: join(HOME, ".gemini", "settings.json"),
-    history: join(HOME, ".gemini", "history"),
-    conversations: join(HOME, ".gemini", "antigravity", "conversations"),
-    implicit: join(HOME, ".gemini", "antigravity", "implicit"),
+    root: GEMINI_ROOT,
+    settings: join(GEMINI_ROOT, "settings.json"),
+    projects: join(GEMINI_ROOT, "projects.json"),
+    tmp: join(GEMINI_ROOT, "tmp"),
+    implicit: join(GEMINI_ROOT, "antigravity", "implicit"),
   },
   codex: {
     root: join(HOME, ".codex"),

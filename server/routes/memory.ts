@@ -16,7 +16,7 @@ async function getAllMemoryFiles(): Promise<MemoryFile[]> {
 
   const [cc, gm, cx] = await Promise.all([
     claudeCode.scanMemoryFiles(),
-    gemini.scanGeminiMdFiles([]), // TODO: pass discovered workspace paths for per-project GEMINI.md
+    gemini.scanGeminiMdFiles(),
     codex.scanMemoryFiles(),
   ]);
 

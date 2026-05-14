@@ -59,7 +59,7 @@ async function runSync(providerFilter?: ProviderId) {
   if (shouldSync("gemini") && existsSync(PATHS.gemini.root)) {
     const s = Date.now();
     const conversations = await gemini.scanConversations();
-    const memoryFiles = await gemini.scanGeminiMdFiles([]); // TODO: pass discovered workspace paths
+    const memoryFiles = await gemini.scanGeminiMdFiles();
 
     const existing = cache.get<Conversation[]>("conversations:list") ?? [];
     cache.set("conversations:list", [...existing, ...conversations], Date.now());
