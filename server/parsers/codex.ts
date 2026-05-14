@@ -7,8 +7,14 @@ import { PATHS } from "../paths";
 
 /**
  * Codex CLI stores all history in a single `~/.codex/history.jsonl`.
- * Each line is: {"session_id":"<uuid>","ts":<unix_seconds>,"text":"<message>"}
- * Messages are grouped by session_id to form conversations.
+ * Each line is assumed to be: {"session_id":"<uuid>","ts":<unix_seconds>,"text":"<message>"}
+ *
+ * UNVERIFIED: this schema and the user/assistant alternation heuristic are not
+ * confirmed against real data. The local install on this machine has no
+ * `history.jsonl` (Codex was installed but never used to produce conversations).
+ * `projectPath` is hardcoded to null because the assumed line shape carries no
+ * cwd/project field; if real Codex data turns out to include one, this should
+ * be updated.
  */
 
 interface HistoryEntry {
