@@ -8,6 +8,10 @@ export interface ClaudeCodeJsonlEntry {
   timestamp?: string;
   sessionId?: string;
   project?: string;
+  cwd?: string;
+  isSidechain?: boolean;
+  isMeta?: boolean;
+  aiTitle?: string;
 }
 
 export interface ClaudeContentBlock {

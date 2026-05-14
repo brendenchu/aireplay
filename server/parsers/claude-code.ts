@@ -58,6 +58,28 @@ function parseJsonlLines(raw: string): ClaudeCodeJsonlEntry[] {
   return entries;
 }
 
+function isMessageEntry(e: ClaudeCodeJsonlEntry): boolean {
+  if (e.type !== "user" && e.type !== "assistant") return false;
+  if (e.isSidechain || e.isMeta) return false;
+  return true;
+}
+
+function latestAiTitle(entries: ClaudeCodeJsonlEntry[]): string | null {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].type === "ai-title") {
+      return entries[i].aiTitle ?? null;
+    }
+  }
+  return null;
+}
+
+function projectFromEntries(entries: ClaudeCodeJsonlEntry[], folderName: string): string {
+  for (const e of entries) {
+    if (typeof e.cwd === "string" && e.cwd) return e.cwd;
+  }
+  return decodePath(folderName);
+}
+
 export async function scanSessions(): Promise<Conversation[]> {
   const projectsDir = PATHS.claudeCode.projects;
   if (!existsSync(projectsDir)) return [];
@@ -75,20 +97,15 @@ export async function scanSessions(): Promise<Conversation[]> {
     for (const file of jsonlFiles) {
       const filePath = join(folderPath, file);
       const sessionId = basename(file, ".jsonl");
-      const projectPath = decodePath(folder.name);
-      const projectName = projectPath.split("/").pop() ?? projectPath;
 
       try {
         const raw = await readFile(filePath, "utf-8");
         const entries = parseJsonlLines(raw);
+        const projectPath = projectFromEntries(entries, folder.name);
+        const projectName = basename(projectPath);
 
-        // Look for ai-title first
-        const titleEntry = entries.find((e) => e.type === "ai-title");
-        const aiTitle = titleEntry
-          ? ((titleEntry as ClaudeCodeJsonlEntry & { aiTitle?: string }).aiTitle ?? null)
-          : null;
-
-        const messages = entries.filter((e) => e.type === "user" || e.type === "assistant");
+        const aiTitle = latestAiTitle(entries);
+        const messages = entries.filter(isMessageEntry);
 
         if (messages.length === 0) continue;
 
@@ -129,15 +146,11 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
 
     const sessionId = basename(filePath, ".jsonl");
     const folderName = basename(join(filePath, ".."));
-    const projectPath = decodePath(folderName);
-    const projectName = projectPath.split("/").pop() ?? projectPath;
+    const projectPath = projectFromEntries(entries, folderName);
+    const projectName = basename(projectPath);
 
-    const titleEntry = entries.find((e) => e.type === "ai-title");
-    const aiTitle = titleEntry
-      ? ((titleEntry as ClaudeCodeJsonlEntry & { aiTitle?: string }).aiTitle ?? null)
-      : null;
-
-    const messageEntries = entries.filter((e) => e.type === "user" || e.type === "assistant");
+    const aiTitle = latestAiTitle(entries);
+    const messageEntries = entries.filter(isMessageEntry);
 
     if (messageEntries.length === 0) return null;
 
