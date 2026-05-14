@@ -85,8 +85,8 @@ app.put("/:id{.+}", async (c) => {
 
   const body = await c.req.json<{ content: string }>();
 
-  if (!body.content || typeof body.content !== "string") {
-    return c.json({ error: "Content must be a non-empty string" }, 400);
+  if (typeof body.content !== "string") {
+    return c.json({ error: "Content must be a string" }, 400);
   }
 
   await writeFile(file.filePath, body.content, "utf-8");
