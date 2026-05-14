@@ -253,6 +253,7 @@ export async function scanMemoryFiles(): Promise<MemoryFile[]> {
 export const parser: ProviderParser = {
   id: "claude-code",
   displayName: "Claude Code",
+  roots: [PATHS.claudeCode.root],
   available: () => existsSync(PATHS.claudeCode.root),
   scanSessions,
   parseSession,

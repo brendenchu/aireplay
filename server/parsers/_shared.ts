@@ -16,10 +16,13 @@ import type { ProviderId } from "../../src/types/provider";
 export interface ProviderParser {
   id: ProviderId;
   displayName: string;
+  /** Filesystem roots whose files this provider may read or write. The memory
+   *  PUT route uses these to reject paths outside any registered provider. */
+  roots: readonly string[];
   available(): boolean;
   scanSessions(): Promise<Conversation[]>;
   parseSession(filePath: string): Promise<ConversationDetail | null>;
-  scanMemoryFiles?: () => Promise<MemoryFile[]>;
+  scanMemoryFiles?: (knownProjectPaths?: string[]) => Promise<MemoryFile[]>;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

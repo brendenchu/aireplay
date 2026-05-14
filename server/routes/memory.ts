@@ -2,11 +2,11 @@ import { existsSync } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import { Hono } from "hono";
+import type { Conversation } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import { isProviderId } from "../../src/types/provider";
 import { cache } from "../cache";
 import { PARSERS } from "../parsers";
-import { PATHS } from "../paths";
 
 const app = new Hono();
 
@@ -14,27 +14,28 @@ async function getAllMemoryFiles(): Promise<MemoryFile[]> {
   const cached = cache.get<MemoryFile[]>("memory:list");
   if (cached) return cached;
 
+  // Per-project memory files (e.g. gemini's project-level GEMINI.md) need the
+  // workspace paths to be discoverable. Use whatever conversation cache has
+  // already populated; parsers fall back to their own discovery when empty.
+  const conversations = cache.get<Conversation[]>("conversations:list") ?? [];
+  const knownProjectPaths = Array.from(
+    new Set(conversations.map((c) => c.projectPath).filter((p): p is string => p !== null)),
+  );
+
   const groups = await Promise.all(
-    PARSERS.map((p) => (p.scanMemoryFiles ? p.scanMemoryFiles() : Promise.resolve([]))),
+    PARSERS.map((p) => p.scanMemoryFiles?.(knownProjectPaths) ?? []),
   );
   const all = groups.flat();
   cache.set("memory:list", all, Date.now());
   return all;
 }
 
-// Known provider root directories for path traversal guard
-const ALLOWED_ROOTS = [
-  PATHS.claudeCode.root,
-  PATHS.copilot.root,
-  PATHS.gemini.root,
-  PATHS.codex.root,
-];
+const ALLOWED_ROOTS = PARSERS.flatMap((p) => p.roots).map((r) => resolve(r));
 
 function isWithinAllowedRoot(filePath: string): boolean {
   const resolvedFile = resolve(filePath);
   return ALLOWED_ROOTS.some((root) => {
-    const resolvedRoot = resolve(root);
-    const rel = relative(resolvedRoot, resolvedFile);
+    const rel = relative(root, resolvedFile);
     return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
   });
 }
@@ -91,10 +92,12 @@ app.put("/:id{.+}", async (c) => {
   await writeFile(file.filePath, body.content, "utf-8");
   const stats = await stat(file.filePath);
 
-  // Update cached entry
   file.content = body.content;
   file.updatedAt = stats.mtime.toISOString();
   file.sizeBytes = stats.size;
+
+  // Search index embeds memory content; rebuild on next query.
+  cache.invalidate("search:index");
 
   return c.json({ success: true, updatedAt: file.updatedAt });
 });

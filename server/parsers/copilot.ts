@@ -394,6 +394,7 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
 export const parser: ProviderParser = {
   id: "copilot",
   displayName: "VS Code Copilot",
+  roots: [PATHS.copilot.root],
   available: () => existsSync(PATHS.copilot.root),
   scanSessions,
   parseSession,

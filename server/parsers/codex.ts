@@ -490,6 +490,7 @@ async function scanMemoriesDir(dir: string, memoryFiles: MemoryFile[]): Promise<
 export const parser: ProviderParser = {
   id: "codex",
   displayName: "Codex CLI",
+  roots: [PATHS.codex.root],
   available: () => existsSync(PATHS.codex.root),
   scanSessions,
   parseSession,

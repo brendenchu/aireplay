@@ -9,10 +9,13 @@ import sync, { runSync } from "./routes/sync";
 export function createApp() {
   const app = new Hono().basePath("/api");
 
-  // Lazy sync: run on first request if cache is empty
+  // Lazy sync: run on first request if cache is empty. Coalesce concurrent
+  // first requests so a burst only triggers one runSync.
+  let lazySync: Promise<unknown> | null = null;
   app.use("*", async (_c, next) => {
     if (!cache.get("conversations:list")) {
-      await runSync();
+      if (!lazySync) lazySync = runSync().finally(() => (lazySync = null));
+      await lazySync;
     }
     await next();
   });

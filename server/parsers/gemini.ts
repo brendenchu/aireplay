@@ -354,6 +354,7 @@ export async function scanMemoryFiles(workspacePaths?: string[]): Promise<Memory
 export const parser: ProviderParser = {
   id: "gemini",
   displayName: "Gemini CLI",
+  roots: [PATHS.gemini.root],
   available: () => existsSync(PATHS.gemini.root),
   scanSessions,
   parseSession,

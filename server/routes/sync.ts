@@ -22,7 +22,14 @@ async function runSync(providerFilter?: ProviderId) {
 
     const s = Date.now();
     const conversations = await parser.scanSessions();
-    const memoryFiles = parser.scanMemoryFiles ? await parser.scanMemoryFiles() : [];
+
+    let memoryFiles: MemoryFile[] = [];
+    if (parser.scanMemoryFiles) {
+      const projectPaths = Array.from(
+        new Set(conversations.map((c) => c.projectPath).filter((p): p is string => p !== null)),
+      );
+      memoryFiles = await parser.scanMemoryFiles(projectPaths);
+    }
 
     const existing = cache.get<Conversation[]>("conversations:list") ?? [];
     cache.set("conversations:list", [...existing, ...conversations], Date.now());

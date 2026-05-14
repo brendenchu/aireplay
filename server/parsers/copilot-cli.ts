@@ -240,7 +240,8 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
 export const parser: ProviderParser = {
   id: "copilot-cli",
   displayName: "Copilot CLI",
-  available: () => existsSync(PATHS.copilotCli.root),
+  roots: [PATHS.copilotCli.root],
+  available: () => existsSync(PATHS.copilotCli.sessionState),
   scanSessions,
   parseSession,
 };
