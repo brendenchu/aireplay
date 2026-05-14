@@ -31,6 +31,10 @@ export const PATHS = {
   copilot: {
     workspaceStorage: copilotStoragePath(),
   },
+  copilotCli: {
+    root: join(HOME, ".copilot"),
+    sessionState: join(HOME, ".copilot", "session-state"),
+  },
   gemini: {
     root: GEMINI_ROOT,
     settings: join(GEMINI_ROOT, "settings.json"),

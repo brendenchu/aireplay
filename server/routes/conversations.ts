@@ -4,6 +4,7 @@ import { cache } from "../cache";
 import * as claudeCode from "../parsers/claude-code";
 import * as codex from "../parsers/codex";
 import * as copilot from "../parsers/copilot";
+import * as copilotCli from "../parsers/copilot-cli";
 import * as gemini from "../parsers/gemini";
 
 const app = new Hono();
@@ -12,13 +13,16 @@ async function getAllConversations(): Promise<Conversation[]> {
   const cached = cache.get<Conversation[]>("conversations:list");
   if (cached) return cached;
 
-  const [cc, cp, gm] = await Promise.all([
+  const [cc, cp, cpcli, gm] = await Promise.all([
     claudeCode.scanSessions(),
     copilot.scanSessions(),
+    copilotCli.scanSessions(),
     gemini.scanConversations(),
   ]);
 
-  const all = [...cc, ...cp, ...gm].sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+  const all = [...cc, ...cp, ...cpcli, ...gm].sort((a, b) =>
+    b.lastMessageAt.localeCompare(a.lastMessageAt),
+  );
 
   cache.set("conversations:list", all, Date.now());
   return all;
@@ -66,6 +70,8 @@ app.get("/:id", async (c) => {
     detail = await claudeCode.parseSession(convo.filePath);
   } else if (provider === "copilot") {
     detail = await copilot.parseSession(convo.filePath);
+  } else if (provider === "copilot-cli") {
+    detail = await copilotCli.parseSession(convo.filePath);
   } else if (provider === "gemini") {
     detail = await gemini.parseConversation(convo.filePath);
   } else if (provider === "codex") {

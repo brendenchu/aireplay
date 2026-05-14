@@ -1,4 +1,4 @@
-export type ProviderId = "claude-code" | "copilot" | "gemini" | "codex";
+export type ProviderId = "claude-code" | "copilot" | "copilot-cli" | "gemini" | "codex";
 
 export interface Provider {
   id: ProviderId;
@@ -14,6 +14,7 @@ export interface Provider {
 export const PROVIDER_NAMES: Record<ProviderId, string> = {
   "claude-code": "Claude Code",
   copilot: "VS Code Copilot",
+  "copilot-cli": "Copilot CLI",
   gemini: "Gemini CLI",
   codex: "Codex CLI",
 };

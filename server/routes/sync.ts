@@ -7,6 +7,7 @@ import { cache } from "../cache";
 import * as claudeCode from "../parsers/claude-code";
 import * as codex from "../parsers/codex";
 import * as copilot from "../parsers/copilot";
+import * as copilotCli from "../parsers/copilot-cli";
 import * as gemini from "../parsers/gemini";
 import { PATHS } from "../paths";
 
@@ -55,6 +56,20 @@ async function runSync(providerFilter?: ProviderId) {
     results.copilot = {
       conversations: conversations.length,
       memoryFiles: memoryFiles.length,
+      duration: Date.now() - s,
+    };
+  }
+
+  if (shouldSync("copilot-cli") && existsSync(PATHS.copilotCli.root)) {
+    const s = Date.now();
+    const conversations = await copilotCli.scanSessions();
+
+    const existing = cache.get<Conversation[]>("conversations:list") ?? [];
+    cache.set("conversations:list", [...existing, ...conversations], Date.now());
+
+    results["copilot-cli"] = {
+      conversations: conversations.length,
+      memoryFiles: 0,
       duration: Date.now() - s,
     };
   }
@@ -117,6 +132,13 @@ app.get("/status", (c) => {
       id: "copilot",
       name: "VS Code Copilot",
       available: existsSync(PATHS.copilot.workspaceStorage),
+      lastSynced: null,
+      stats: { conversations: 0, memoryFiles: 0 },
+    },
+    {
+      id: "copilot-cli",
+      name: "Copilot CLI",
+      available: existsSync(PATHS.copilotCli.root),
       lastSynced: null,
       stats: { conversations: 0, memoryFiles: 0 },
     },
