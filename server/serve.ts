@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { extname, join } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { extname, join, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { createApp } from "./index";
 
@@ -18,6 +18,8 @@ const MIME_TYPES: Record<string, string> = {
 
 export function startServer(distDir: string, port: number) {
   const app = createApp();
+  const distRoot = resolve(distDir);
+  const indexHtmlPath = join(distRoot, "index.html");
 
   const server = createServer(async (req, res) => {
     const url = req.url ?? "/";
@@ -52,11 +54,15 @@ export function startServer(distDir: string, port: number) {
           const reader = response.body.getReader();
           const stream = new Readable({
             async read() {
-              const { done, value } = await reader.read();
-              if (done) {
-                this.push(null);
-              } else {
-                this.push(Buffer.from(value));
+              try {
+                const { done, value } = await reader.read();
+                if (done) {
+                  this.push(null);
+                } else {
+                  this.push(Buffer.from(value));
+                }
+              } catch (err) {
+                this.destroy(err instanceof Error ? err : new Error(String(err)));
               }
             },
           });
@@ -72,25 +78,16 @@ export function startServer(distDir: string, port: number) {
       return;
     }
 
-    // Static files from dist/
-    const urlPath = url.split("?")[0];
-    let filePath = join(distDir, urlPath);
-
-    if (!existsSync(filePath) || urlPath === "/") {
-      // SPA fallback
-      filePath = join(distDir, "index.html");
-    }
-
+    // Static files from dist/, enforcing that the resolved path stays inside distRoot.
     try {
-      const content = readFileSync(filePath);
-      const ext = extname(filePath);
-      res.setHeader("Content-Type", MIME_TYPES[ext] ?? "application/octet-stream");
-      res.end(content);
-    } catch {
-      // Final fallback to index.html for SPA routes
-      const html = readFileSync(join(distDir, "index.html"));
-      res.setHeader("Content-Type", "text/html");
-      res.end(html);
+      const urlPath = url.split("?")[0];
+      const html = await serveStatic(distRoot, indexHtmlPath, urlPath);
+      res.setHeader("Content-Type", html.contentType);
+      res.end(html.content);
+    } catch (err) {
+      console.error("[aireplay] static", err);
+      res.statusCode = 500;
+      res.end("Internal server error");
     }
   });
 
@@ -99,6 +96,39 @@ export function startServer(distDir: string, port: number) {
   });
 
   return server;
+}
+
+interface StaticResponse {
+  content: Buffer;
+  contentType: string;
+}
+
+async function serveStatic(
+  distRoot: string,
+  indexHtmlPath: string,
+  urlPath: string,
+): Promise<StaticResponse> {
+  if (urlPath !== "/") {
+    const resolved = resolve(distRoot, `.${urlPath}`);
+    if (resolved === distRoot || resolved.startsWith(distRoot + sep)) {
+      const fileType = await classify(resolved);
+      if (fileType === "file") {
+        const content = await readFile(resolved);
+        return { content, contentType: MIME_TYPES[extname(resolved)] ?? "application/octet-stream" };
+      }
+    }
+  }
+  // SPA fallback: any unmatched route returns index.html so the client router takes over.
+  return { content: await readFile(indexHtmlPath), contentType: "text/html" };
+}
+
+async function classify(filePath: string): Promise<"file" | "other"> {
+  try {
+    const stats = await stat(filePath);
+    return stats.isFile() ? "file" : "other";
+  } catch {
+    return "other";
+  }
 }
 
 function collectBody(req: import("node:http").IncomingMessage): Promise<ArrayBuffer> {
