@@ -10,7 +10,7 @@
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All</SelectItem>
-          <SelectItem value="conversations">Conversations</SelectItem>
+          <SelectItem value="conversation">Conversations</SelectItem>
           <SelectItem value="memory">Memory</SelectItem>
         </SelectContent>
       </Select>

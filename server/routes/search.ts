@@ -77,12 +77,16 @@ app.get("/", (c) => {
   }
 
   const provider = c.req.query("provider");
-  const type = c.req.query("type") ?? "all";
+  const rawType = c.req.query("type") ?? "all";
+  const type = rawType === "conversations" ? "conversation" : rawType;
   const limitRaw = c.req.query("limit");
   const limit = limitRaw === undefined ? 20 : Number.parseInt(limitRaw, 10);
 
   if (provider && !isProviderId(provider)) {
     return c.json({ error: "Unknown provider" }, 400);
+  }
+  if (type !== "all" && type !== "conversation" && type !== "memory") {
+    return c.json({ error: "Invalid type (all|conversation|memory)" }, 400);
   }
   if (!Number.isFinite(limit) || limit < 1 || limit > 200) {
     return c.json({ error: "Invalid limit (1-200)" }, 400);
