@@ -1,56 +1,12 @@
 import { Hono } from "hono";
 import type { Conversation } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
-import { isProviderId, type ProviderId, type ProviderStatus } from "../../src/types/provider";
+import { isProviderId, type ProviderStatus } from "../../src/types/provider";
 import { cache } from "../cache";
 import { PARSERS } from "../parsers";
-import { compareLastMessageDesc } from "../parsers/_shared";
+import { runSync } from "../sync-engine";
 
 const app = new Hono();
-
-async function runSync(providerFilter?: ProviderId) {
-  const start = Date.now();
-  const results: Record<string, { conversations: number; memoryFiles: number; duration: number }> =
-    {};
-
-  cache.invalidate("conversations:list");
-  cache.invalidate("memory:list");
-  cache.invalidate("search:index");
-
-  for (const parser of PARSERS) {
-    if (providerFilter && providerFilter !== parser.id) continue;
-    if (!parser.available()) continue;
-
-    const s = Date.now();
-    const conversations = await parser.scanSessions();
-
-    let memoryFiles: MemoryFile[] = [];
-    if (parser.scanMemoryFiles) {
-      const projectPaths = Array.from(
-        new Set(conversations.map((c) => c.projectPath).filter((p): p is string => p !== null)),
-      );
-      memoryFiles = await parser.scanMemoryFiles(projectPaths);
-    }
-
-    const existing = cache.get<Conversation[]>("conversations:list") ?? [];
-    cache.set("conversations:list", [...existing, ...conversations]);
-    if (memoryFiles.length > 0) {
-      const existingMem = cache.get<MemoryFile[]>("memory:list") ?? [];
-      cache.set("memory:list", [...existingMem, ...memoryFiles]);
-    }
-
-    results[parser.id] = {
-      conversations: conversations.length,
-      memoryFiles: memoryFiles.length,
-      duration: Date.now() - s,
-    };
-  }
-
-  const merged = cache.get<Conversation[]>("conversations:list") ?? [];
-  cache.set("conversations:list", [...merged].sort(compareLastMessageDesc));
-
-  return { providers: results, duration: Date.now() - start };
-}
 
 app.post("/", async (c) => {
   const body = await c.req.json<{ provider?: string }>().catch((): { provider?: string } => ({}));
@@ -82,5 +38,4 @@ app.get("/status", (c) => {
   return c.json({ lastSyncedAt: null, providers });
 });
 
-export { runSync };
 export default app;
