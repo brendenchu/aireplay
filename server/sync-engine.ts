@@ -18,6 +18,16 @@ export interface SyncResult {
 }
 
 let inFlight: Promise<SyncResult> | null = null;
+let lastSyncedAt: string | null = null;
+const lastSyncedByProvider = new Map<string, string>();
+
+export function getLastSyncedAt(): string | null {
+  return lastSyncedAt;
+}
+
+export function getLastSyncedByProvider(): Map<string, string> {
+  return lastSyncedByProvider;
+}
 
 /**
  * Run a full or provider-filtered sync. Concurrent callers — lazy bootstrap
@@ -83,10 +93,12 @@ async function executeSync(providerFilter?: ProviderId): Promise<SyncResult> {
       duration: Date.now() - s,
       ...(errors.length > 0 ? { error: errors.join("; ") } : {}),
     };
+    if (errors.length === 0) lastSyncedByProvider.set(parser.id, new Date().toISOString());
   }
 
   const merged = cache.get<Conversation[]>("conversations:list") ?? [];
   cache.set("conversations:list", [...merged].sort(compareLastMessageDesc));
 
+  lastSyncedAt = new Date().toISOString();
   return { providers: results, duration: Date.now() - start };
 }

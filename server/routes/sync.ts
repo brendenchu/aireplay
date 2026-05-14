@@ -4,7 +4,7 @@ import type { MemoryFile } from "../../src/types/memory";
 import { isProviderId, type ProviderStatus } from "../../src/types/provider";
 import { cache } from "../cache";
 import { PARSERS } from "../parsers";
-import { runSync } from "../sync-engine";
+import { getLastSyncedAt, getLastSyncedByProvider, runSync } from "../sync-engine";
 
 const app = new Hono();
 
@@ -19,11 +19,12 @@ app.post("/", async (c) => {
 });
 
 app.get("/status", (c) => {
+  const perProvider = getLastSyncedByProvider();
   const providers: ProviderStatus[] = PARSERS.map((p) => ({
     id: p.id,
     name: p.displayName,
     available: p.available(),
-    lastSynced: null,
+    lastSynced: perProvider.get(p.id) ?? null,
     stats: { conversations: 0, memoryFiles: 0 },
   }));
 
@@ -35,7 +36,7 @@ app.get("/status", (c) => {
     p.stats.memoryFiles = memoryFiles.filter((m) => m.provider === p.id).length;
   }
 
-  return c.json({ lastSyncedAt: null, providers });
+  return c.json({ lastSyncedAt: getLastSyncedAt(), providers });
 });
 
 export default app;
