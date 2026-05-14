@@ -155,7 +155,23 @@ function decodeWorkspacePath(path: string): string {
   }
 }
 
-export async function resolveWorkspaces(): Promise<Map<string, string>> {
+let workspaceCache: Promise<Map<string, string>> | null = null;
+
+/**
+ * Resolve VS Code workspaceStorage hash → workspace path. Memoized so a single
+ * sync run only walks `workspaceStorage/` once; cleared by `invalidateWorkspaceCache`
+ * at the start of each sync.
+ */
+export function resolveWorkspaces(): Promise<Map<string, string>> {
+  if (!workspaceCache) workspaceCache = loadWorkspaces();
+  return workspaceCache;
+}
+
+export function invalidateWorkspaceCache(): void {
+  workspaceCache = null;
+}
+
+async function loadWorkspaces(): Promise<Map<string, string>> {
   const baseDir = PATHS.copilot.root;
   if (!existsSync(baseDir)) return new Map();
 

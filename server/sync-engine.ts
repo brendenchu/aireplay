@@ -4,6 +4,7 @@ import type { ProviderId } from "../src/types/provider";
 import { cache } from "./cache";
 import { PARSERS } from "./parsers";
 import { compareLastMessageDesc } from "./parsers/_shared";
+import { invalidateWorkspaceCache } from "./parsers/copilot";
 
 export interface ProviderSyncResult {
   conversations: number;
@@ -49,6 +50,7 @@ async function executeSync(providerFilter?: ProviderId): Promise<SyncResult> {
   cache.invalidate("conversations:list");
   cache.invalidate("memory:list");
   cache.invalidate("search:index");
+  invalidateWorkspaceCache();
 
   for (const parser of PARSERS) {
     if (providerFilter && providerFilter !== parser.id) continue;
