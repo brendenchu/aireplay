@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-14
+
+### Added
+
+- Copilot CLI provider — parses the standalone agentic Copilot CLI's `~/.copilot/session-state/{id}/events.jsonl` event streams (distinct from VS Code Copilot)
+- Codex CLI session-file parser — reads `~/.codex/sessions/YYYY/MM/DD/*.jsonl` rollouts with role/tool-call reconstruction; `~/.codex/history.jsonl` retained as fallback for older installs
+- VS Code Copilot per-workspace memory files (`memory-tool/memories/`) included in the memory list
+- `GET /api/sync/status` reports `lastSyncedAt` per provider and overall (previously always null)
+- `limit`/`offset` query params on conversations and `limit` on search validate input and return 400 on bad values instead of returning silently empty pages
+
+### Changed
+
+- Provider parsers register a uniform `ProviderParser` interface in `server/parsers/index.ts`; routes iterate the registry instead of hardcoding per-provider switches
+- Cross-platform provider-path detection covers macOS, Windows, Linux, and WSL (reads Windows env vars through `/mnt/c/...`)
+- Gemini parser rewritten against the actual on-disk schema: both JSON and JSONL session formats, project-root resolution via `.project_root`, workspace discovery under `~/.gemini/tmp/`
+- Static-file handler in `serve.ts` uses async I/O, enforces that resolved paths stay under `dist/`, and surfaces stream errors to the client instead of dropping them
+- Sync orchestration extracted to `server/sync-engine.ts`; concurrent lazy-bootstrap and explicit `POST /sync` callers share one in-flight promise so the cache only rebuilds once
+- `memory.ts` PUT invalidates `memory:list` after writing the file instead of mutating cached objects in place
+- Memory PUT accepts empty content; clearing a memory file is now possible through the UI
+
+### Fixed
+
+- Merged conversation cache stays sorted by `lastMessageAt` after `runSync` (previously grouped by parser registration order on the explicit-sync path)
+- Per-parser errors during `runSync` no longer abort the entire run; failures surface in the response and other parsers continue
+- Codex title fallback uses `||` so empty `truncateTitle` results fall through to `"Untitled"`
+- `pickExistingPath` no longer returns `undefined` when all platform candidates are empty (WSL with no `APPDATA`/`USERPROFILE`)
+- Claude Code project path read from session entries when available, falling back to the encoded folder name
+
+### Removed
+
+- Unused `Cache.isStale`, `mtime`, and `cachedAt` fields (cache API trimmed to two-arg `set`)
+- Unused `CopilotSessionWrapper`/`CopilotRequest`/`CopilotResponse` types from `server/types.ts`
+
+### Developer Experience
+
+- Shared parser helpers in `server/parsers/_shared.ts`: `parseJsonlLines`, `flattenTextContent`, `truncateTitle`, `compareLastMessageDesc`, `isRecord`, `isMessageRole`, `readGlobalMemoryFile`, `walkMarkdownFiles`
+- Per-parser conversation sort removed in favour of a single post-merge sort
+- Copilot workspace map memoized for the duration of a sync run; reset between runs
+
 ## [0.1.1] - 2026-04-16
 
 ### Added

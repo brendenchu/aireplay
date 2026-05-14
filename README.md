@@ -1,6 +1,6 @@
 # aireplay
 
-Local web app for browsing, searching, and editing AI conversation history and memory files. Reads data directly from Claude Code, VS Code Copilot, Gemini CLI, and Codex CLI — no cloud, no database, everything stays on your machine.
+Local web app for browsing, searching, and editing AI conversation history and memory files. Reads data directly from Claude Code, VS Code Copilot, Copilot CLI, Gemini CLI, and Codex CLI — no cloud, no database, everything stays on your machine.
 
 > **aireplay is a local development tool — not intended for production or public deployment.** It has no authentication and binds to `localhost` by default. Do not expose it to the internet.
 
@@ -42,7 +42,8 @@ Open [http://localhost:4123](http://localhost:4123)
 | Provider | Conversations | Memory Files |
 |----------|:---:|:---:|
 | Claude Code | ✓ | ✓ |
-| VS Code Copilot | ✓ | — |
+| VS Code Copilot | ✓ | ✓ |
+| Copilot CLI | ✓ | — |
 | Gemini CLI | ✓ | ✓ |
 | Codex CLI | ✓ | ✓ |
 
