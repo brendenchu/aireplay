@@ -92,14 +92,12 @@ app.put("/:id{.+}", async (c) => {
   await writeFile(file.filePath, body.content, "utf-8");
   const stats = await stat(file.filePath);
 
-  file.content = body.content;
-  file.updatedAt = stats.mtime.toISOString();
-  file.sizeBytes = stats.size;
-
-  // Search index embeds memory content; rebuild on next query.
+  // Force a fresh scan on next read so the memory list and search index
+  // pick up the new content instead of relying on in-place mutation.
+  cache.invalidate("memory:list");
   cache.invalidate("search:index");
 
-  return c.json({ success: true, updatedAt: file.updatedAt });
+  return c.json({ success: true, updatedAt: stats.mtime.toISOString() });
 });
 
 export default app;
