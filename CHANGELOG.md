@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-14
+
+### Added
+
+- Unsaved-changes guard on the memory edit page: navigating away or closing the tab with edits in the textarea now prompts before discarding
+
+### Fixed
+
+- Search "Conversations" type filter — frontend value now matches the server's singular `conversation` stored type; the server also accepts the old plural form and 400s on unknown types
+- `ProviderBadge` renders Copilot CLI with a teal accent instead of falling back to unbranded shadcn default styling
+
+### Developer Experience
+
+- GitHub Actions workflow runs `bun run check` and `bun run build` on push to `main` and on pull requests
+
 ## [0.2.0] - 2026-05-14
 
 ### Added

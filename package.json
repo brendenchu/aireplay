@@ -1,6 +1,6 @@
 {
   "name": "aireplay",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "Local web app for browsing, searching, and editing AI conversation history and memory files",
   "author": "Brenden Chu",
