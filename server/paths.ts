@@ -16,7 +16,7 @@ function isWsl(): boolean {
   return process.platform === "linux" && typeof process.env.WSL_DISTRO_NAME === "string";
 }
 
-function pickExistingPath(...candidates: string[]): string {
+function pickExistingPath(...candidates: string[]): string | undefined {
   const nonEmpty = candidates.filter(Boolean);
   const existing = nonEmpty.find((candidate) => existsSync(candidate));
   return existing ?? nonEmpty[0];
@@ -44,10 +44,10 @@ function copilotStoragePath(): string {
         )
       : "";
 
-  if (process.platform === "darwin") return pickExistingPath(envOverride ?? "", darwin);
-  if (process.platform === "win32") return pickExistingPath(envOverride ?? "", windows);
-  if (isWsl()) return pickExistingPath(envOverride ?? "", linux, wslWindows);
-  return pickExistingPath(envOverride ?? "", linux);
+  if (process.platform === "darwin") return pickExistingPath(envOverride ?? "", darwin) ?? darwin;
+  if (process.platform === "win32") return pickExistingPath(envOverride ?? "", windows) ?? windows;
+  if (isWsl()) return pickExistingPath(envOverride ?? "", linux, wslWindows) ?? linux;
+  return pickExistingPath(envOverride ?? "", linux) ?? linux;
 }
 
 function copilotCliRootPath(): string {
@@ -55,13 +55,13 @@ function copilotCliRootPath(): string {
   const native = join(HOME, ".copilot");
 
   if (process.platform !== "linux" || !isWsl()) {
-    return pickExistingPath(envOverride ?? "", native);
+    return pickExistingPath(envOverride ?? "", native) ?? native;
   }
 
   const wslWindows = process.env.USERPROFILE
     ? join(windowsPathToWsl(process.env.USERPROFILE), ".copilot")
     : "";
-  return pickExistingPath(envOverride ?? "", native, wslWindows);
+  return pickExistingPath(envOverride ?? "", native, wslWindows) ?? native;
 }
 
 const COPILOT_CLI_ROOT = copilotCliRootPath();
