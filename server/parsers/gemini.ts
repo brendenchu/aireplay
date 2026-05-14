@@ -5,13 +5,7 @@ import { basename, dirname, extname, join } from "node:path";
 import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
-import {
-  compareLastMessageDesc,
-  flattenTextContent,
-  isRecord,
-  type ProviderParser,
-  truncateTitle,
-} from "./_shared";
+import { flattenTextContent, isRecord, type ProviderParser, truncateTitle } from "./_shared";
 
 /**
  * Gemini CLI / Antigravity stores chat sessions under
@@ -252,7 +246,7 @@ export async function scanSessions(): Promise<Conversation[]> {
     }
   }
 
-  return conversations.sort(compareLastMessageDesc);
+  return conversations;
 }
 
 export async function parseSession(filePath: string): Promise<ConversationDetail | null> {

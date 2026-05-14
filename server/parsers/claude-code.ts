@@ -11,7 +11,6 @@ import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
 import type { ClaudeCodeJsonlEntry, ClaudeContentBlock } from "../types";
 import {
-  compareLastMessageDesc,
   flattenTextContent,
   isMessageRole,
   isRecord,
@@ -125,7 +124,7 @@ export async function scanSessions(): Promise<Conversation[]> {
     }
   }
 
-  return conversations.sort(compareLastMessageDesc);
+  return conversations;
 }
 
 export async function parseSession(filePath: string): Promise<ConversationDetail | null> {

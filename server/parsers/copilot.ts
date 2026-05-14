@@ -6,13 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
-import {
-  compareLastMessageDesc,
-  flattenTextContent,
-  isRecord,
-  type ProviderParser,
-  truncateTitle,
-} from "./_shared";
+import { flattenTextContent, isRecord, type ProviderParser, truncateTitle } from "./_shared";
 
 interface WorkspaceJson {
   folder?: string;
@@ -244,7 +238,7 @@ export async function scanSessions(): Promise<Conversation[]> {
     }
   }
 
-  return conversations.sort(compareLastMessageDesc);
+  return conversations;
 }
 
 /**

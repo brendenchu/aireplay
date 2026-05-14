@@ -5,7 +5,6 @@ import { basename, dirname, join } from "node:path";
 import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
 import { PATHS } from "../paths";
 import {
-  compareLastMessageDesc,
   flattenTextContent,
   isRecord,
   type ProviderParser,
@@ -205,7 +204,7 @@ export async function scanSessions(): Promise<Conversation[]> {
     });
   }
 
-  return conversations.sort(compareLastMessageDesc);
+  return conversations;
 }
 
 export async function parseSession(filePath: string): Promise<ConversationDetail | null> {

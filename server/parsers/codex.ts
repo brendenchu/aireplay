@@ -11,7 +11,6 @@ import type {
 import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
 import {
-  compareLastMessageDesc,
   flattenTextContent,
   isRecord,
   type ProviderParser,
@@ -325,7 +324,7 @@ export async function scanSessions(): Promise<Conversation[]> {
   }
 
   if (conversations.length > 0) {
-    return conversations.sort(compareLastMessageDesc);
+    return conversations;
   }
 
   // Fallback for old installs that only expose prompt history.
@@ -354,7 +353,7 @@ export async function scanSessions(): Promise<Conversation[]> {
         filePath: PATHS.codex.history,
       });
     }
-    return conversations.sort(compareLastMessageDesc);
+    return conversations;
   } catch {
     return [];
   }
