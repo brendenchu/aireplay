@@ -1,11 +1,8 @@
 import { Hono } from "hono";
 import type { Conversation } from "../../src/types/conversation";
+import type { ProviderId } from "../../src/types/provider";
 import { cache } from "../cache";
-import * as claudeCode from "../parsers/claude-code";
-import * as codex from "../parsers/codex";
-import * as copilot from "../parsers/copilot";
-import * as copilotCli from "../parsers/copilot-cli";
-import * as gemini from "../parsers/gemini";
+import { findParser, PARSERS } from "../parsers";
 
 const app = new Hono();
 
@@ -13,17 +10,8 @@ async function getAllConversations(): Promise<Conversation[]> {
   const cached = cache.get<Conversation[]>("conversations:list");
   if (cached) return cached;
 
-  const [cc, cp, cpcli, gm, cx] = await Promise.all([
-    claudeCode.scanSessions(),
-    copilot.scanSessions(),
-    copilotCli.scanSessions(),
-    gemini.scanSessions(),
-    codex.scanSessions(),
-  ]);
-
-  const all = [...cc, ...cp, ...cpcli, ...gm, ...cx].sort((a, b) =>
-    b.lastMessageAt.localeCompare(a.lastMessageAt),
-  );
+  const groups = await Promise.all(PARSERS.map((p) => p.scanSessions()));
+  const all = groups.flat().sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
 
   cache.set("conversations:list", all, Date.now());
   return all;
@@ -58,25 +46,14 @@ app.get("/:id", async (c) => {
   const id = c.req.param("id");
   const [provider] = id.split(":");
 
-  // Find the conversation to get the file path
   const all = await getAllConversations();
   const convo = all.find((cv) => cv.id === id);
   if (!convo) {
     return c.json({ error: "Conversation not found" }, 404);
   }
 
-  let detail = null;
-  if (provider === "claude-code") {
-    detail = await claudeCode.parseSession(convo.filePath);
-  } else if (provider === "copilot") {
-    detail = await copilot.parseSession(convo.filePath);
-  } else if (provider === "copilot-cli") {
-    detail = await copilotCli.parseSession(convo.filePath);
-  } else if (provider === "gemini") {
-    detail = await gemini.parseSession(convo.filePath);
-  } else if (provider === "codex") {
-    detail = await codex.parseSession(convo.filePath);
-  }
+  const parser = findParser(provider as ProviderId);
+  const detail = await parser?.parseSession(convo.filePath);
 
   if (!detail) {
     return c.json({ error: "Failed to parse conversation" }, 500);

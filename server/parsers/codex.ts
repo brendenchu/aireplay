@@ -15,6 +15,7 @@ import {
   flattenTextContent,
   isRecord,
   parseJsonlLines,
+  type SessionParser,
   truncateTitle,
 } from "./_shared";
 
@@ -485,3 +486,12 @@ async function scanMemoriesDir(dir: string, memoryFiles: MemoryFile[]): Promise<
     }
   }
 }
+
+export const parser: SessionParser = {
+  id: "codex",
+  displayName: "Codex CLI",
+  available: () => existsSync(PATHS.codex.root),
+  scanSessions,
+  parseSession,
+  scanMemoryFiles,
+};

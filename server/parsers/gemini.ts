@@ -8,6 +8,7 @@ import {
   compareLastMessageDesc,
   flattenTextContent,
   isRecord,
+  type SessionParser,
   truncateTitle,
 } from "./_shared";
 
@@ -350,3 +351,12 @@ export async function scanGeminiMdFiles(workspacePaths?: string[]): Promise<Memo
 
   return memoryFiles;
 }
+
+export const parser: SessionParser = {
+  id: "gemini",
+  displayName: "Gemini CLI",
+  available: () => existsSync(PATHS.gemini.root),
+  scanSessions,
+  parseSession,
+  scanMemoryFiles: () => scanGeminiMdFiles(),
+};

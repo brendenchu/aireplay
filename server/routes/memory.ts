@@ -1,12 +1,10 @@
 import { existsSync } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
+import { isAbsolute, relative, resolve } from "node:path";
 import { Hono } from "hono";
 import type { MemoryFile } from "../../src/types/memory";
 import { cache } from "../cache";
-import * as claudeCode from "../parsers/claude-code";
-import * as codex from "../parsers/codex";
-import * as copilot from "../parsers/copilot";
-import * as gemini from "../parsers/gemini";
+import { PARSERS } from "../parsers";
 import { PATHS } from "../paths";
 
 const app = new Hono();
@@ -15,14 +13,10 @@ async function getAllMemoryFiles(): Promise<MemoryFile[]> {
   const cached = cache.get<MemoryFile[]>("memory:list");
   if (cached) return cached;
 
-  const [cc, cp, gm, cx] = await Promise.all([
-    claudeCode.scanMemoryFiles(),
-    copilot.scanMemoryFiles(),
-    gemini.scanGeminiMdFiles(),
-    codex.scanMemoryFiles(),
-  ]);
-
-  const all = [...cc, ...cp, ...gm, ...cx];
+  const groups = await Promise.all(
+    PARSERS.map((p) => (p.scanMemoryFiles ? p.scanMemoryFiles() : Promise.resolve([]))),
+  );
+  const all = groups.flat();
   cache.set("memory:list", all, Date.now());
   return all;
 }
@@ -36,7 +30,12 @@ const ALLOWED_ROOTS = [
 ];
 
 function isWithinAllowedRoot(filePath: string): boolean {
-  return ALLOWED_ROOTS.some((root) => filePath.startsWith(`${root}/`));
+  const resolvedFile = resolve(filePath);
+  return ALLOWED_ROOTS.some((root) => {
+    const resolvedRoot = resolve(root);
+    const rel = relative(resolvedRoot, resolvedFile);
+    return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  });
 }
 
 app.get("/", async (c) => {

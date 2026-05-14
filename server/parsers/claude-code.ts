@@ -15,6 +15,7 @@ import {
   flattenTextContent,
   isRecord,
   parseJsonlLines as parseJsonl,
+  type SessionParser,
   truncateTitle,
 } from "./_shared";
 
@@ -244,3 +245,12 @@ export async function scanMemoryFiles(): Promise<MemoryFile[]> {
 
   return memoryFiles;
 }
+
+export const parser: SessionParser = {
+  id: "claude-code",
+  displayName: "Claude Code",
+  available: () => existsSync(PATHS.claudeCode.root),
+  scanSessions,
+  parseSession,
+  scanMemoryFiles,
+};

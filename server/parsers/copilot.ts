@@ -1,10 +1,12 @@
+import type { Dirent } from "node:fs";
 import { existsSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
-import { compareLastMessageDesc, truncateTitle } from "./_shared";
+import { compareLastMessageDesc, type SessionParser, truncateTitle } from "./_shared";
 
 interface WorkspaceJson {
   folder?: string;
@@ -77,7 +79,7 @@ function replayChangelog(raw: string): SessionData {
           obj = obj[key];
         } else if (typeof obj === "object" && obj !== null) {
           const rec = obj as Record<string, unknown>;
-          if (!(key as string in rec)) rec[key as string] = [];
+          if (!((key as string) in rec)) rec[key as string] = [];
           obj = rec[key as string];
         }
       }
@@ -132,6 +134,15 @@ function extractResponseText(req: SessionData): string {
   return JSON.stringify(resp);
 }
 
+function decodeWorkspacePath(path: string): string {
+  if (!path.startsWith("file://")) return path;
+  try {
+    return fileURLToPath(path);
+  } catch {
+    return decodeURIComponent(path.replace("file://", ""));
+  }
+}
+
 export async function resolveWorkspaces(): Promise<Map<string, string>> {
   const baseDir = PATHS.copilot.workspaceStorage;
   if (!existsSync(baseDir)) return new Map();
@@ -150,11 +161,7 @@ export async function resolveWorkspaces(): Promise<Map<string, string>> {
       const ws: WorkspaceJson = JSON.parse(raw);
       const path = ws.folder ?? ws.workspace ?? null;
       if (path) {
-        // Convert file:// URI to path
-        const decoded = path.startsWith("file://")
-          ? decodeURIComponent(path.replace("file://", ""))
-          : path;
-        map.set(entry.name, decoded);
+        map.set(entry.name, decodeWorkspacePath(path));
       }
     } catch {
       // skip malformed workspace.json
@@ -196,8 +203,7 @@ export async function scanSessions(): Promise<Conversation[]> {
         if (requests.length === 0) continue;
 
         const title =
-          session.customTitle ||
-          (truncateTitle(extractMessageText(requests[0])) || "Untitled");
+          session.customTitle || truncateTitle(extractMessageText(requests[0])) || "Untitled";
 
         const creationDate = session.creationDate
           ? new Date(session.creationDate).toISOString()
@@ -236,7 +242,7 @@ async function walkMemories(
   workspacePath: string | null,
   out: MemoryFile[],
 ): Promise<void> {
-  let entries;
+  let entries: Dirent[];
   try {
     entries = await readdir(dir, { withFileTypes: true });
   } catch {
@@ -281,7 +287,7 @@ export async function scanMemoryFiles(): Promise<MemoryFile[]> {
   const workspaces = await resolveWorkspaces();
   const memoryFiles: MemoryFile[] = [];
 
-  let hashes;
+  let hashes: Dirent[];
   try {
     hashes = await readdir(baseDir, { withFileTypes: true });
   } catch {
@@ -290,13 +296,7 @@ export async function scanMemoryFiles(): Promise<MemoryFile[]> {
 
   for (const entry of hashes) {
     if (!entry.isDirectory()) continue;
-    const memoriesDir = join(
-      baseDir,
-      entry.name,
-      "GitHub.copilot-chat",
-      "memory-tool",
-      "memories",
-    );
+    const memoriesDir = join(baseDir, entry.name, "GitHub.copilot-chat", "memory-tool", "memories");
     if (!existsSync(memoriesDir)) continue;
     const workspacePath = workspaces.get(entry.name) ?? null;
     await walkMemories(memoriesDir, memoriesDir, workspacePath, memoryFiles);
@@ -348,7 +348,7 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
     }
 
     const title =
-      session.customTitle || (truncateTitle(extractMessageText(requests[0])) || "Untitled");
+      session.customTitle || truncateTitle(extractMessageText(requests[0])) || "Untitled";
 
     const creationDate = session.creationDate ? new Date(session.creationDate).toISOString() : "";
 
@@ -371,3 +371,12 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
     return null;
   }
 }
+
+export const parser: SessionParser = {
+  id: "copilot",
+  displayName: "VS Code Copilot",
+  available: () => existsSync(PATHS.copilot.workspaceStorage),
+  scanSessions,
+  parseSession,
+  scanMemoryFiles,
+};

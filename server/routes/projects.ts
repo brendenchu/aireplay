@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import { Hono } from "hono";
 import type { Conversation, Project } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
@@ -32,7 +33,7 @@ function buildProjects(conversations: Conversation[], memoryFiles: MemoryFile[])
       projectMap.set(convo.projectPath, {
         id: encodeProjectId(convo.projectPath),
         path: convo.projectPath,
-        name: convo.projectName ?? convo.projectPath.split("/").pop() ?? convo.projectPath,
+        name: convo.projectName ?? basename(convo.projectPath),
         providers: [convo.provider],
         conversationCount: 1,
         memoryFileCount: 0,

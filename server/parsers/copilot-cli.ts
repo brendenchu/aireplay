@@ -9,6 +9,7 @@ import {
   flattenTextContent,
   isRecord,
   parseJsonlLines,
+  type SessionParser,
   truncateTitle,
 } from "./_shared";
 
@@ -235,3 +236,11 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
     messages,
   };
 }
+
+export const parser: SessionParser = {
+  id: "copilot-cli",
+  displayName: "Copilot CLI",
+  available: () => existsSync(PATHS.copilotCli.root),
+  scanSessions,
+  parseSession,
+};

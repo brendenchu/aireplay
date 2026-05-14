@@ -1,24 +1,70 @@
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 const HOME = homedir();
 const GEMINI_ROOT = process.env.GEMINI_CLI_HOME ?? join(HOME, ".gemini");
 
-function copilotStoragePath(): string {
-  switch (process.platform) {
-    case "darwin":
-      return join(HOME, "Library", "Application Support", "Code", "User", "workspaceStorage");
-    case "win32":
-      return join(
-        process.env.APPDATA ?? join(HOME, "AppData", "Roaming"),
-        "Code",
-        "User",
-        "workspaceStorage",
-      );
-    default:
-      return join(HOME, ".config", "Code", "User", "workspaceStorage");
-  }
+function windowsPathToWsl(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const driveMatch = normalized.match(/^([A-Za-z]):\/(.*)$/);
+  if (!driveMatch) return normalized;
+  return `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2]}`;
 }
+
+function isWsl(): boolean {
+  return process.platform === "linux" && typeof process.env.WSL_DISTRO_NAME === "string";
+}
+
+function pickExistingPath(...candidates: string[]): string {
+  const nonEmpty = candidates.filter(Boolean);
+  const existing = nonEmpty.find((candidate) => existsSync(candidate));
+  return existing ?? nonEmpty[0];
+}
+
+function copilotStoragePath(): string {
+  const envOverride = process.env.COPILOT_WORKSPACE_STORAGE;
+
+  const darwin = join(HOME, "Library", "Application Support", "Code", "User", "workspaceStorage");
+  const windows = join(
+    process.env.APPDATA ?? join(HOME, "AppData", "Roaming"),
+    "Code",
+    "User",
+    "workspaceStorage",
+  );
+  const linux = join(HOME, ".config", "Code", "User", "workspaceStorage");
+  const wslWindows = process.env.APPDATA
+    ? join(windowsPathToWsl(process.env.APPDATA), "Code", "User", "workspaceStorage")
+    : process.env.USERPROFILE
+      ? join(
+          windowsPathToWsl(join(process.env.USERPROFILE, "AppData", "Roaming")),
+          "Code",
+          "User",
+          "workspaceStorage",
+        )
+      : "";
+
+  if (process.platform === "darwin") return pickExistingPath(envOverride ?? "", darwin);
+  if (process.platform === "win32") return pickExistingPath(envOverride ?? "", windows);
+  if (isWsl()) return pickExistingPath(envOverride ?? "", linux, wslWindows);
+  return pickExistingPath(envOverride ?? "", linux);
+}
+
+function copilotCliRootPath(): string {
+  const envOverride = process.env.COPILOT_CLI_HOME;
+  const native = join(HOME, ".copilot");
+
+  if (process.platform !== "linux" || !isWsl()) {
+    return pickExistingPath(envOverride ?? "", native);
+  }
+
+  const wslWindows = process.env.USERPROFILE
+    ? join(windowsPathToWsl(process.env.USERPROFILE), ".copilot")
+    : "";
+  return pickExistingPath(envOverride ?? "", native, wslWindows);
+}
+
+const COPILOT_CLI_ROOT = copilotCliRootPath();
 
 export const PATHS = {
   claudeCode: {
@@ -32,8 +78,8 @@ export const PATHS = {
     workspaceStorage: copilotStoragePath(),
   },
   copilotCli: {
-    root: join(HOME, ".copilot"),
-    sessionState: join(HOME, ".copilot", "session-state"),
+    root: COPILOT_CLI_ROOT,
+    sessionState: join(COPILOT_CLI_ROOT, "session-state"),
   },
   gemini: {
     root: GEMINI_ROOT,

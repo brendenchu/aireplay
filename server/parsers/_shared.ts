@@ -4,6 +4,24 @@
  * between parsers (line parsing, title truncation, content flattening, sort).
  */
 
+import type { Conversation, ConversationDetail } from "../../src/types/conversation";
+import type { MemoryFile } from "../../src/types/memory";
+import type { ProviderId } from "../../src/types/provider";
+
+/**
+ * Each provider implements this so routes can iterate instead of hardcoding
+ * a switch over provider id. `available` reflects whether the provider's
+ * on-disk root exists; routes skip scanning when false.
+ */
+export interface SessionParser {
+  id: ProviderId;
+  displayName: string;
+  available(): boolean;
+  scanSessions(): Promise<Conversation[]>;
+  parseSession(filePath: string): Promise<ConversationDetail | null>;
+  scanMemoryFiles?: () => Promise<MemoryFile[]>;
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
