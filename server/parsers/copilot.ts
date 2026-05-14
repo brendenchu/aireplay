@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, join, relative } from "node:path";
 import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
+import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
 
 interface WorkspaceJson {
@@ -225,6 +226,85 @@ export async function scanSessions(): Promise<Conversation[]> {
   }
 
   return conversations.sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+}
+
+/**
+ * Recursively walk a directory collecting markdown files into the memory list.
+ * Used for Copilot's per-workspace `memory-tool/memories/` tree.
+ */
+async function walkMemories(
+  dir: string,
+  rootDir: string,
+  workspacePath: string | null,
+  out: MemoryFile[],
+): Promise<void> {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await walkMemories(full, rootDir, workspacePath, out);
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+
+    try {
+      const content = await readFile(full, "utf-8");
+      const stats = await stat(full);
+      const projectName = workspacePath ? basename(workspacePath) : null;
+      const rel = relative(rootDir, full);
+      out.push({
+        id: `copilot:${full}`,
+        provider: "copilot",
+        filePath: full,
+        relativePath: projectName ? `${projectName}/${rel}` : rel,
+        projectPath: workspacePath,
+        projectName,
+        name: entry.name,
+        content,
+        updatedAt: stats.mtime.toISOString(),
+        sizeBytes: stats.size,
+      });
+    } catch {
+      // skip unreadable
+    }
+  }
+}
+
+export async function scanMemoryFiles(): Promise<MemoryFile[]> {
+  const baseDir = PATHS.copilot.workspaceStorage;
+  if (!existsSync(baseDir)) return [];
+
+  const workspaces = await resolveWorkspaces();
+  const memoryFiles: MemoryFile[] = [];
+
+  let hashes;
+  try {
+    hashes = await readdir(baseDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  for (const entry of hashes) {
+    if (!entry.isDirectory()) continue;
+    const memoriesDir = join(
+      baseDir,
+      entry.name,
+      "GitHub.copilot-chat",
+      "memory-tool",
+      "memories",
+    );
+    if (!existsSync(memoriesDir)) continue;
+    const workspacePath = workspaces.get(entry.name) ?? null;
+    await walkMemories(memoriesDir, memoriesDir, workspacePath, memoryFiles);
+  }
+
+  return memoryFiles;
 }
 
 export async function parseSession(filePath: string): Promise<ConversationDetail | null> {

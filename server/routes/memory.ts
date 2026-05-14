@@ -5,6 +5,7 @@ import type { MemoryFile } from "../../src/types/memory";
 import { cache } from "../cache";
 import * as claudeCode from "../parsers/claude-code";
 import * as codex from "../parsers/codex";
+import * as copilot from "../parsers/copilot";
 import * as gemini from "../parsers/gemini";
 import { PATHS } from "../paths";
 
@@ -14,19 +15,25 @@ async function getAllMemoryFiles(): Promise<MemoryFile[]> {
   const cached = cache.get<MemoryFile[]>("memory:list");
   if (cached) return cached;
 
-  const [cc, gm, cx] = await Promise.all([
+  const [cc, cp, gm, cx] = await Promise.all([
     claudeCode.scanMemoryFiles(),
+    copilot.scanMemoryFiles(),
     gemini.scanGeminiMdFiles(),
     codex.scanMemoryFiles(),
   ]);
 
-  const all = [...cc, ...gm, ...cx];
+  const all = [...cc, ...cp, ...gm, ...cx];
   cache.set("memory:list", all, Date.now());
   return all;
 }
 
 // Known provider root directories for path traversal guard
-const ALLOWED_ROOTS = [PATHS.claudeCode.root, PATHS.gemini.root, PATHS.codex.root];
+const ALLOWED_ROOTS = [
+  PATHS.claudeCode.root,
+  PATHS.copilot.workspaceStorage,
+  PATHS.gemini.root,
+  PATHS.codex.root,
+];
 
 function isWithinAllowedRoot(filePath: string): boolean {
   return ALLOWED_ROOTS.some((root) => filePath.startsWith(`${root}/`));

@@ -45,13 +45,16 @@ async function runSync(providerFilter?: ProviderId) {
   if (shouldSync("copilot") && existsSync(PATHS.copilot.workspaceStorage)) {
     const s = Date.now();
     const conversations = await copilot.scanSessions();
+    const memoryFiles = await copilot.scanMemoryFiles();
 
     const existing = cache.get<Conversation[]>("conversations:list") ?? [];
     cache.set("conversations:list", [...existing, ...conversations], Date.now());
+    const existingMem = cache.get<MemoryFile[]>("memory:list") ?? [];
+    cache.set("memory:list", [...existingMem, ...memoryFiles], Date.now());
 
     results.copilot = {
       conversations: conversations.length,
-      memoryFiles: 0,
+      memoryFiles: memoryFiles.length,
       duration: Date.now() - s,
     };
   }
