@@ -4,6 +4,7 @@ import type { MemoryFile } from "../../src/types/memory";
 import { isProviderId, type ProviderId, type ProviderStatus } from "../../src/types/provider";
 import { cache } from "../cache";
 import { PARSERS } from "../parsers";
+import { compareLastMessageDesc } from "../parsers/_shared";
 
 const app = new Hono();
 
@@ -44,6 +45,9 @@ async function runSync(providerFilter?: ProviderId) {
       duration: Date.now() - s,
     };
   }
+
+  const merged = cache.get<Conversation[]>("conversations:list") ?? [];
+  cache.set("conversations:list", [...merged].sort(compareLastMessageDesc));
 
   return { providers: results, duration: Date.now() - start };
 }
