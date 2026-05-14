@@ -5,7 +5,13 @@ import { basename, dirname, extname, join } from "node:path";
 import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
-import { flattenTextContent, isRecord, type ProviderParser, truncateTitle } from "./_shared";
+import {
+  flattenTextContent,
+  isRecord,
+  type ProviderParser,
+  readGlobalMemoryFile,
+  truncateTitle,
+} from "./_shared";
 
 /**
  * Gemini CLI / Antigravity stores chat sessions under
@@ -290,27 +296,8 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
 export async function scanMemoryFiles(workspacePaths?: string[]): Promise<MemoryFile[]> {
   const memoryFiles: MemoryFile[] = [];
 
-  const globalGemini = PATHS.gemini.globalMemory;
-  if (existsSync(globalGemini)) {
-    try {
-      const content = await readFile(globalGemini, "utf-8");
-      const stats = await stat(globalGemini);
-      memoryFiles.push({
-        id: "gemini:GEMINI.md",
-        provider: "gemini",
-        filePath: globalGemini,
-        relativePath: "GEMINI.md",
-        projectPath: null,
-        projectName: null,
-        name: "GEMINI.md",
-        content,
-        updatedAt: stats.mtime.toISOString(),
-        sizeBytes: stats.size,
-      });
-    } catch {
-      // skip
-    }
-  }
+  const globalGemini = await readGlobalMemoryFile("gemini", PATHS.gemini.globalMemory);
+  if (globalGemini) memoryFiles.push(globalGemini);
 
   // Default to workspaces Gemini already knows about (discovered via tmp/{name}/.project_root).
   // Callers can pass an explicit list to extend or override.

@@ -16,6 +16,7 @@ import {
   isRecord,
   type ProviderParser,
   parseJsonlLines as parseJsonl,
+  readGlobalMemoryFile,
   truncateTitle,
 } from "./_shared";
 
@@ -223,28 +224,8 @@ export async function scanMemoryFiles(): Promise<MemoryFile[]> {
     }
   }
 
-  // Also include global CLAUDE.md
-  const globalMemory = PATHS.claudeCode.globalMemory;
-  if (existsSync(globalMemory)) {
-    try {
-      const content = await readFile(globalMemory, "utf-8");
-      const stats = await stat(globalMemory);
-      memoryFiles.push({
-        id: "claude-code:CLAUDE.md",
-        provider: "claude-code",
-        filePath: globalMemory,
-        relativePath: "CLAUDE.md",
-        projectPath: null,
-        projectName: null,
-        name: "CLAUDE.md",
-        content,
-        updatedAt: stats.mtime.toISOString(),
-        sizeBytes: stats.size,
-      });
-    } catch {
-      // skip
-    }
-  }
+  const globalMemory = await readGlobalMemoryFile("claude-code", PATHS.claudeCode.globalMemory);
+  if (globalMemory) memoryFiles.push(globalMemory);
 
   return memoryFiles;
 }

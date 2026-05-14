@@ -15,6 +15,7 @@ import {
   isRecord,
   type ProviderParser,
   parseJsonlLines,
+  readGlobalMemoryFile,
   truncateTitle,
 } from "./_shared";
 
@@ -420,27 +421,8 @@ export async function parseSession(locator: string): Promise<ConversationDetail 
 export async function scanMemoryFiles(): Promise<MemoryFile[]> {
   const memoryFiles: MemoryFile[] = [];
 
-  const agentsMd = PATHS.codex.globalMemory;
-  if (existsSync(agentsMd)) {
-    try {
-      const content = await readFile(agentsMd, "utf-8");
-      const stats = await stat(agentsMd);
-      memoryFiles.push({
-        id: "codex:AGENTS.md",
-        provider: "codex",
-        filePath: agentsMd,
-        relativePath: "AGENTS.md",
-        projectPath: null,
-        projectName: null,
-        name: "AGENTS.md",
-        content,
-        updatedAt: stats.mtime.toISOString(),
-        sizeBytes: stats.size,
-      });
-    } catch {
-      // skip unreadable files
-    }
-  }
+  const agentsMd = await readGlobalMemoryFile("codex", PATHS.codex.globalMemory);
+  if (agentsMd) memoryFiles.push(agentsMd);
 
   if (existsSync(PATHS.codex.memories)) {
     try {

@@ -4,6 +4,9 @@
  * between parsers (line parsing, title truncation, content flattening, sort).
  */
 
+import { existsSync } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
+import { basename } from "node:path";
 import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import type { ProviderId } from "../../src/types/provider";
@@ -93,4 +96,36 @@ export function flattenTextContent(value: unknown): string {
 
 export function compareLastMessageDesc<T extends { lastMessageAt: string }>(a: T, b: T): number {
   return b.lastMessageAt.localeCompare(a.lastMessageAt);
+}
+
+/**
+ * Read a provider's global memory/instructions file (e.g. `~/.claude/CLAUDE.md`)
+ * into a `MemoryFile`. Returns null when the file is missing or unreadable.
+ * The `name` defaults to the file's basename; `id` is `"{provider}:{name}"`.
+ */
+export async function readGlobalMemoryFile(
+  provider: ProviderId,
+  filePath: string,
+  name?: string,
+): Promise<MemoryFile | null> {
+  if (!existsSync(filePath)) return null;
+  try {
+    const content = await readFile(filePath, "utf-8");
+    const stats = await stat(filePath);
+    const resolvedName = name ?? basename(filePath);
+    return {
+      id: `${provider}:${resolvedName}`,
+      provider,
+      filePath,
+      relativePath: resolvedName,
+      projectPath: null,
+      projectName: null,
+      name: resolvedName,
+      content,
+      updatedAt: stats.mtime.toISOString(),
+      sizeBytes: stats.size,
+    };
+  } catch {
+    return null;
+  }
 }
