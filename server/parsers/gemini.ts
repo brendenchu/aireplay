@@ -181,18 +181,23 @@ async function readProjectRoot(workspaceDir: string): Promise<string | null> {
   }
 }
 
-function deriveTitle(messages: RawMessage[], header: SessionHeader): string {
+function truncate(str: string, max: number): string {
+  if (str.length <= max) return str;
+  return `${str.slice(0, max).trimEnd()}…`;
+}
+
+function deriveTitle(messages: RawMessage[], fallback: string): string {
   const firstUser = messages.find((m) => m.type === "user");
   if (firstUser) {
     const text = flattenContent(firstUser.content).trim();
-    if (text) return text.slice(0, 80);
+    if (text) return truncate(text, 80);
   }
   const firstNonInfo = messages.find((m) => m.type !== "info");
   if (firstNonInfo) {
     const text = flattenContent(firstNonInfo.content).trim();
-    if (text) return text.slice(0, 80);
+    if (text) return truncate(text, 80);
   }
-  return header.sessionId || "Untitled";
+  return fallback || "Untitled";
 }
 
 interface WorkspaceInfo {
@@ -218,7 +223,7 @@ async function discoverWorkspaces(): Promise<WorkspaceInfo[]> {
   return workspaces;
 }
 
-export async function scanConversations(): Promise<Conversation[]> {
+export async function scanSessions(): Promise<Conversation[]> {
   const workspaces = await discoverWorkspaces();
   const conversations: Conversation[] = [];
 
@@ -252,7 +257,7 @@ export async function scanConversations(): Promise<Conversation[]> {
         sessionId,
         projectPath: ws.projectPath,
         projectName,
-        title: deriveTitle(parsed.messages, parsed.header),
+        title: deriveTitle(parsed.messages, sessionId),
         startedAt: parsed.header.startTime || (stats?.birthtime.toISOString() ?? ""),
         lastMessageAt: parsed.header.lastUpdated || (stats?.mtime.toISOString() ?? ""),
         messageCount: parsed.messages.length,
@@ -264,7 +269,7 @@ export async function scanConversations(): Promise<Conversation[]> {
   return conversations.sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
 }
 
-export async function parseConversation(filePath: string): Promise<ConversationDetail | null> {
+export async function parseSession(filePath: string): Promise<ConversationDetail | null> {
   const parsed = await parseSessionFile(filePath);
   if (!parsed) return null;
 
@@ -291,7 +296,7 @@ export async function parseConversation(filePath: string): Promise<ConversationD
     sessionId,
     projectPath,
     projectName: projectPath ? basename(projectPath) : wsName,
-    title: deriveTitle(parsed.messages, parsed.header),
+    title: deriveTitle(parsed.messages, sessionId),
     startedAt: parsed.header.startTime || (stats?.birthtime.toISOString() ?? ""),
     lastMessageAt: parsed.header.lastUpdated || (stats?.mtime.toISOString() ?? ""),
     messageCount: messages.length,

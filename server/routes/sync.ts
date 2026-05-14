@@ -76,7 +76,7 @@ async function runSync(providerFilter?: ProviderId) {
 
   if (shouldSync("gemini") && existsSync(PATHS.gemini.root)) {
     const s = Date.now();
-    const conversations = await gemini.scanConversations();
+    const conversations = await gemini.scanSessions();
     const memoryFiles = await gemini.scanGeminiMdFiles();
 
     const existing = cache.get<Conversation[]>("conversations:list") ?? [];

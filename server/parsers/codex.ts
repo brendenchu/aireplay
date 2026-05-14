@@ -1,20 +1,20 @@
+import type { Dirent } from "node:fs";
 import { existsSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
-import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
+import { basename, join, relative } from "node:path";
+import type {
+  Conversation,
+  ConversationDetail,
+  Message,
+  ToolCall,
+} from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
 
 /**
- * Codex CLI stores all history in a single `~/.codex/history.jsonl`.
- * Each line is assumed to be: {"session_id":"<uuid>","ts":<unix_seconds>,"text":"<message>"}
- *
- * UNVERIFIED: this schema and the user/assistant alternation heuristic are not
- * confirmed against real data. The local install on this machine has no
- * `history.jsonl` (Codex was installed but never used to produce conversations).
- * `projectPath` is hardcoded to null because the assumed line shape carries no
- * cwd/project field; if real Codex data turns out to include one, this should
- * be updated.
+ * Codex stores the browsable transcript in `~/.codex/sessions/YYYY/MM/DD/*.jsonl`.
+ * `~/.codex/history.jsonl` is only a prompt-history index, so it is useful for
+ * fallback titles but not enough to reconstruct conversations.
  */
 
 interface HistoryEntry {
@@ -23,15 +23,49 @@ interface HistoryEntry {
   text: string;
 }
 
-function parseHistoryLines(raw: string): HistoryEntry[] {
-  const entries: HistoryEntry[] = [];
+interface CodexSessionEntry {
+  type: string;
+  timestamp?: string;
+  payload: Record<string, unknown>;
+}
+
+interface SessionMeta {
+  sessionId: string;
+  projectPath: string | null;
+  projectName: string | null;
+  startedAt: string;
+  lastMessageAt: string;
+  title: string;
+  messages: Message[];
+  filePath: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function truncate(str: string, max: number): string {
+  if (str.length <= max) return str;
+  return `${str.slice(0, max).trimEnd()}...`;
+}
+
+function toIsoTimestamp(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value !== "number") return "";
+
+  // Codex history currently uses seconds; sqlite state uses seconds/ms depending
+  // on column. Accept both so fallback data stays stable across versions.
+  const millis = value > 10_000_000_000 ? value : value * 1000;
+  return new Date(millis).toISOString();
+}
+
+function parseJsonlLines(raw: string): unknown[] {
+  const entries: unknown[] = [];
   for (const line of raw.split("\n")) {
-    if (!line.trim()) continue;
+    const trimmed = line.trim();
+    if (!trimmed) continue;
     try {
-      const parsed = JSON.parse(line);
-      if (parsed.session_id && typeof parsed.ts === "number" && typeof parsed.text === "string") {
-        entries.push(parsed);
-      }
+      entries.push(JSON.parse(trimmed));
     } catch {
       // skip malformed lines
     }
@@ -39,108 +73,372 @@ function parseHistoryLines(raw: string): HistoryEntry[] {
   return entries;
 }
 
-function truncate(str: string, max: number): string {
-  if (str.length <= max) return str;
-  return `${str.slice(0, max).trimEnd()}…`;
-}
-
-function groupBySession(entries: HistoryEntry[]): Map<string, HistoryEntry[]> {
-  const groups = new Map<string, HistoryEntry[]>();
-  for (const entry of entries) {
-    const group = groups.get(entry.session_id);
-    if (group) {
-      group.push(entry);
-    } else {
-      groups.set(entry.session_id, [entry]);
+function parseHistoryLines(raw: string): HistoryEntry[] {
+  const entries: HistoryEntry[] = [];
+  for (const parsed of parseJsonlLines(raw)) {
+    if (!isRecord(parsed)) continue;
+    if (
+      typeof parsed.session_id === "string" &&
+      typeof parsed.ts === "number" &&
+      typeof parsed.text === "string"
+    ) {
+      entries.push({
+        session_id: parsed.session_id,
+        ts: parsed.ts,
+        text: parsed.text,
+      });
     }
   }
-  return groups;
+  return entries;
+}
+
+async function readHistoryTitleMap(): Promise<Map<string, string>> {
+  const titles = new Map<string, string>();
+  if (!existsSync(PATHS.codex.history)) return titles;
+
+  try {
+    const raw = await readFile(PATHS.codex.history, "utf-8");
+    for (const entry of parseHistoryLines(raw)) {
+      if (!titles.has(entry.session_id)) {
+        titles.set(entry.session_id, truncate(entry.text.trim(), 80) || "Untitled");
+      }
+    }
+  } catch {
+    // ignore prompt-history failures; session files are authoritative
+  }
+
+  return titles;
+}
+
+function parseSessionEntries(raw: string): CodexSessionEntry[] {
+  const entries: CodexSessionEntry[] = [];
+  for (const parsed of parseJsonlLines(raw)) {
+    if (!isRecord(parsed)) continue;
+    if (typeof parsed.type !== "string" || !isRecord(parsed.payload)) continue;
+    entries.push({
+      type: parsed.type,
+      timestamp: typeof parsed.timestamp === "string" ? parsed.timestamp : undefined,
+      payload: parsed.payload,
+    });
+  }
+  return entries;
+}
+
+async function findSessionFiles(dir = PATHS.codex.sessions): Promise<string[]> {
+  if (!existsSync(dir)) return [];
+
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const files: string[] = [];
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await findSessionFiles(fullPath)));
+    } else if (entry.isFile() && entry.name.endsWith(".jsonl")) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+function sessionIdFromFile(filePath: string): string {
+  const file = basename(filePath, ".jsonl");
+  const match = file.match(
+    /^rollout-.+?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i,
+  );
+  return match?.[1] ?? file;
+}
+
+function extractContentText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+
+  return content
+    .map((item) => {
+      if (!isRecord(item)) return "";
+      return typeof item.text === "string" ? item.text : "";
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function codexRoleToMessageRole(role: unknown): Message["role"] | null {
+  if (role === "user" || role === "assistant" || role === "system") return role;
+  if (role === "developer") return "system";
+  return null;
+}
+
+function parseUserEvent(
+  entry: CodexSessionEntry,
+  sessionId: string,
+  index: number,
+): Message | null {
+  if (entry.type !== "event_msg" || entry.payload.type !== "user_message") return null;
+  const content = typeof entry.payload.message === "string" ? entry.payload.message : "";
+  if (!content.trim()) return null;
+  return {
+    id: `codex:${sessionId}:event:${index}`,
+    role: "user",
+    content,
+    timestamp: entry.timestamp ?? "",
+    provider: "codex",
+  };
+}
+
+function parseResponseMessage(
+  entry: CodexSessionEntry,
+  sessionId: string,
+  index: number,
+): Message | null {
+  if (entry.type !== "response_item" || entry.payload.type !== "message") return null;
+
+  const role = codexRoleToMessageRole(entry.payload.role);
+  if (!role) return null;
+
+  const content = extractContentText(entry.payload.content);
+  if (!content.trim()) return null;
+
+  return {
+    id: `codex:${sessionId}:response:${index}`,
+    role,
+    content,
+    timestamp: entry.timestamp ?? "",
+    provider: "codex",
+  };
+}
+
+function attachToolOutput(
+  toolCalls: ToolCall[],
+  callIdToTool: Map<string, ToolCall>,
+  entry: CodexSessionEntry,
+) {
+  if (entry.type !== "response_item" || entry.payload.type !== "function_call_output") return;
+  const callId = typeof entry.payload.call_id === "string" ? entry.payload.call_id : "";
+  const toolCall = callIdToTool.get(callId);
+  if (!toolCall) return;
+  toolCall.output = typeof entry.payload.output === "string" ? entry.payload.output : "";
+  if (!toolCalls.includes(toolCall)) toolCalls.push(toolCall);
+}
+
+function summarizeSessionFile(
+  filePath: string,
+  entries: CodexSessionEntry[],
+  historyTitles: Map<string, string>,
+): SessionMeta | null {
+  const metaEntry = entries.find((entry) => entry.type === "session_meta");
+  const sessionId =
+    (typeof metaEntry?.payload.id === "string" ? metaEntry.payload.id : null) ??
+    sessionIdFromFile(filePath);
+
+  const projectPath = typeof metaEntry?.payload.cwd === "string" ? metaEntry.payload.cwd : null;
+  const projectName = projectPath ? basename(projectPath) : null;
+
+  const messages: Message[] = [];
+  const toolCallById = new Map<string, ToolCall>();
+  let lastAssistant: Message | null = null;
+  const hasUserEvents = entries.some(
+    (entry) => entry.type === "event_msg" && entry.payload.type === "user_message",
+  );
+
+  entries.forEach((entry, index) => {
+    const userEvent = parseUserEvent(entry, sessionId, index);
+    if (userEvent) {
+      messages.push(userEvent);
+      return;
+    }
+
+    const responseMessage = parseResponseMessage(entry, sessionId, index);
+    if (responseMessage) {
+      if (hasUserEvents && responseMessage.role === "user") return;
+      if (responseMessage.role === "system") return;
+      messages.push(responseMessage);
+      lastAssistant = responseMessage.role === "assistant" ? responseMessage : null;
+      return;
+    }
+
+    if (entry.type === "response_item" && entry.payload.type === "function_call") {
+      const name = typeof entry.payload.name === "string" ? entry.payload.name : "unknown";
+      const input = typeof entry.payload.arguments === "string" ? entry.payload.arguments : "";
+      const toolCall: ToolCall = { name, input };
+      const callId = typeof entry.payload.call_id === "string" ? entry.payload.call_id : "";
+      if (callId) toolCallById.set(callId, toolCall);
+      if (lastAssistant) {
+        lastAssistant.toolCalls = [...(lastAssistant.toolCalls ?? []), toolCall];
+      }
+      return;
+    }
+
+    if (lastAssistant?.toolCalls) {
+      attachToolOutput(lastAssistant.toolCalls, toolCallById, entry);
+    }
+  });
+
+  if (messages.length === 0) return null;
+
+  const timestamps = messages.map((message) => message.timestamp).filter(Boolean);
+  const startedAt =
+    timestamps[0] ??
+    toIsoTimestamp(metaEntry?.payload.timestamp) ??
+    entries.find((entry) => entry.timestamp)?.timestamp ??
+    "";
+  const lastMessageAt = timestamps[timestamps.length - 1] ?? startedAt;
+
+  const firstUser = messages.find((message) => message.role === "user");
+  const title =
+    historyTitles.get(sessionId) ?? truncate(firstUser?.content.trim() ?? "", 80) ?? "Untitled";
+
+  return {
+    sessionId,
+    projectPath,
+    projectName,
+    title: title || "Untitled",
+    startedAt,
+    lastMessageAt,
+    messages,
+    filePath,
+  };
+}
+
+async function readSession(
+  filePath: string,
+  historyTitles: Map<string, string>,
+): Promise<SessionMeta | null> {
+  try {
+    const raw = await readFile(filePath, "utf-8");
+    return summarizeSessionFile(filePath, parseSessionEntries(raw), historyTitles);
+  } catch {
+    return null;
+  }
+}
+
+async function sessionFileForId(sessionId: string): Promise<string | null> {
+  for (const filePath of await findSessionFiles()) {
+    if (sessionIdFromFile(filePath) === sessionId) return filePath;
+    try {
+      const raw = await readFile(filePath, "utf-8");
+      const meta = parseSessionEntries(raw).find((entry) => entry.type === "session_meta");
+      if (meta?.payload.id === sessionId) return filePath;
+    } catch {
+      // skip unreadable files
+    }
+  }
+  return null;
 }
 
 export async function scanSessions(): Promise<Conversation[]> {
-  const historyFile = PATHS.codex.history;
-  if (!existsSync(historyFile)) return [];
+  const historyTitles = await readHistoryTitleMap();
+  const sessionFiles = await findSessionFiles();
+  const conversations: Conversation[] = [];
 
+  for (const filePath of sessionFiles) {
+    const summary = await readSession(filePath, historyTitles);
+    if (!summary) continue;
+    conversations.push({
+      id: `codex:${summary.sessionId}`,
+      provider: "codex",
+      sessionId: summary.sessionId,
+      projectPath: summary.projectPath,
+      projectName: summary.projectName,
+      title: summary.title,
+      startedAt: summary.startedAt,
+      lastMessageAt: summary.lastMessageAt,
+      messageCount: summary.messages.length,
+      filePath,
+    });
+  }
+
+  if (conversations.length > 0) {
+    return conversations.sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+  }
+
+  // Fallback for old installs that only expose prompt history.
+  if (!existsSync(PATHS.codex.history)) return [];
   try {
-    const raw = await readFile(historyFile, "utf-8");
-    const entries = parseHistoryLines(raw);
-    const sessions = groupBySession(entries);
+    const raw = await readFile(PATHS.codex.history, "utf-8");
+    const bySession = new Map<string, HistoryEntry[]>();
+    for (const entry of parseHistoryLines(raw)) {
+      bySession.set(entry.session_id, [...(bySession.get(entry.session_id) ?? []), entry]);
+    }
 
-    const conversations: Conversation[] = [];
-
-    for (const [sessionId, messages] of sessions) {
-      if (messages.length === 0) continue;
-
-      // Sort messages by timestamp within each session
-      messages.sort((a, b) => a.ts - b.ts);
-
-      const firstText = messages[0].text;
-      const title = truncate(firstText, 80) || "Untitled";
-
-      const startedAt = new Date(messages[0].ts * 1000).toISOString();
-      const lastMessageAt = new Date(messages[messages.length - 1].ts * 1000).toISOString();
-
+    for (const [sessionId, entries] of bySession) {
+      entries.sort((a, b) => a.ts - b.ts);
+      const startedAt = toIsoTimestamp(entries[0]?.ts);
+      const lastMessageAt = toIsoTimestamp(entries[entries.length - 1]?.ts);
       conversations.push({
         id: `codex:${sessionId}`,
         provider: "codex",
         sessionId,
         projectPath: null,
         projectName: null,
-        title,
+        title: truncate(entries[0]?.text.trim() ?? "", 80) || "Untitled",
         startedAt,
         lastMessageAt,
-        messageCount: messages.length,
-        filePath: historyFile,
+        messageCount: entries.length,
+        filePath: PATHS.codex.history,
       });
     }
-
     return conversations.sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
   } catch {
     return [];
   }
 }
 
-export async function parseSession(sessionId: string): Promise<ConversationDetail | null> {
-  const historyFile = PATHS.codex.history;
-  if (!existsSync(historyFile)) return null;
+export async function parseSession(locator: string): Promise<ConversationDetail | null> {
+  const historyTitles = await readHistoryTitleMap();
+  const filePath = existsSync(locator) ? locator : await sessionFileForId(locator);
 
+  if (filePath) {
+    const summary = await readSession(filePath, historyTitles);
+    if (!summary) return null;
+    return {
+      id: `codex:${summary.sessionId}`,
+      provider: "codex",
+      sessionId: summary.sessionId,
+      projectPath: summary.projectPath,
+      projectName: summary.projectName,
+      title: summary.title,
+      startedAt: summary.startedAt,
+      lastMessageAt: summary.lastMessageAt,
+      messageCount: summary.messages.length,
+      filePath,
+      messages: summary.messages,
+    };
+  }
+
+  // Fallback detail for old prompt-history-only installs.
+  if (!existsSync(PATHS.codex.history)) return null;
   try {
-    const raw = await readFile(historyFile, "utf-8");
-    const entries = parseHistoryLines(raw);
-    const sessionEntries = entries.filter((e) => e.session_id === sessionId);
+    const raw = await readFile(PATHS.codex.history, "utf-8");
+    const entries = parseHistoryLines(raw)
+      .filter((entry) => entry.session_id === locator)
+      .sort((a, b) => a.ts - b.ts);
 
-    if (sessionEntries.length === 0) return null;
+    if (entries.length === 0) return null;
 
-    sessionEntries.sort((a, b) => a.ts - b.ts);
-
-    const firstText = sessionEntries[0].text;
-    const title = truncate(firstText, 80) || "Untitled";
-
-    // Codex doesn't store roles — messages alternate user/assistant
-    const messages: Message[] = sessionEntries.map((entry, index) => ({
-      id: `codex:${sessionId}:${index}`,
-      role: (index % 2 === 0 ? "user" : "assistant") as Message["role"],
+    const messages: Message[] = entries.map((entry, index) => ({
+      id: `codex:${locator}:history:${index}`,
+      role: "user",
       content: entry.text,
-      timestamp: new Date(entry.ts * 1000).toISOString(),
-      provider: "codex" as const,
+      timestamp: toIsoTimestamp(entry.ts),
+      provider: "codex",
     }));
 
-    const startedAt = new Date(sessionEntries[0].ts * 1000).toISOString();
-    const lastMessageAt = new Date(
-      sessionEntries[sessionEntries.length - 1].ts * 1000,
-    ).toISOString();
-
     return {
-      id: `codex:${sessionId}`,
+      id: `codex:${locator}`,
       provider: "codex",
-      sessionId,
+      sessionId: locator,
       projectPath: null,
       projectName: null,
-      title,
-      startedAt,
-      lastMessageAt,
+      title: truncate(entries[0]?.text.trim() ?? "", 80) || "Untitled",
+      startedAt: messages[0]?.timestamp ?? "",
+      lastMessageAt: messages[messages.length - 1]?.timestamp ?? "",
       messageCount: messages.length,
-      filePath: historyFile,
+      filePath: PATHS.codex.history,
       messages,
     };
   } catch {
@@ -151,7 +449,6 @@ export async function parseSession(sessionId: string): Promise<ConversationDetai
 export async function scanMemoryFiles(): Promise<MemoryFile[]> {
   const memoryFiles: MemoryFile[] = [];
 
-  // Global AGENTS.md instructions file
   const agentsMd = PATHS.codex.instructions;
   if (existsSync(agentsMd)) {
     try {
@@ -170,17 +467,15 @@ export async function scanMemoryFiles(): Promise<MemoryFile[]> {
         sizeBytes: stats.size,
       });
     } catch {
-      // skip
+      // skip unreadable files
     }
   }
 
-  // Memories directory — may contain MEMORY.md, raw_memories.md, rollout_summaries/
-  const memoriesDir = PATHS.codex.memories;
-  if (existsSync(memoriesDir)) {
+  if (existsSync(PATHS.codex.memories)) {
     try {
-      await scanMemoriesDir(memoriesDir, memoryFiles);
+      await scanMemoriesDir(PATHS.codex.memories, memoryFiles);
     } catch {
-      // skip
+      // skip corrupt memory trees
     }
   }
 
@@ -197,7 +492,7 @@ async function scanMemoriesDir(dir: string, memoryFiles: MemoryFile[]): Promise<
       try {
         const content = await readFile(fullPath, "utf-8");
         const stats = await stat(fullPath);
-        const relativePath = fullPath.replace(`${PATHS.codex.root}/`, "");
+        const relativePath = relative(PATHS.codex.root, fullPath);
 
         memoryFiles.push({
           id: `codex:${relativePath}`,
@@ -212,10 +507,9 @@ async function scanMemoriesDir(dir: string, memoryFiles: MemoryFile[]): Promise<
           sizeBytes: stats.size,
         });
       } catch {
-        // skip unreadable
+        // skip unreadable files
       }
     } else if (entry.isDirectory()) {
-      // Recurse into subdirectories like rollout_summaries/
       await scanMemoriesDir(fullPath, memoryFiles);
     }
   }

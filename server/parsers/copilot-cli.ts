@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs";
 import { existsSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
@@ -34,6 +35,31 @@ interface CopilotEvent {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function isMessage(value: Message | null): value is Message {
+  return value !== null;
+}
+
+function extractContentText(value: unknown): string {
+  if (typeof value === "string") return value;
+
+  if (isRecord(value)) {
+    if (typeof value.text === "string") return value.text;
+    if (typeof value.content === "string") return value.content;
+    return "";
+  }
+
+  if (!Array.isArray(value)) return "";
+
+  return value
+    .map((part) => {
+      if (typeof part === "string") return part;
+      if (isRecord(part) && typeof part.text === "string") return part.text;
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n");
 }
 
 /**
@@ -97,24 +123,24 @@ async function readEvents(sessionDir: string): Promise<CopilotEvent[]> {
   return events;
 }
 
-function eventToMessage(
-  event: CopilotEvent,
-  sessionId: string,
-): Message | null {
+function eventToMessage(event: CopilotEvent, sessionId: string): Message | null {
   if (event.type === "user.message") {
-    const content = event.data.content;
-    if (typeof content !== "string") return null;
+    const content = extractContentText(event.data.content);
+    const transformedContent =
+      typeof event.data.transformedContent === "string" ? event.data.transformedContent : "";
+    const finalContent = content.trim() ? content : transformedContent;
+    if (!finalContent.trim()) return null;
     return {
       id: `copilot-cli:${sessionId}:${event.id}`,
       role: "user",
-      content,
+      content: finalContent,
       timestamp: event.timestamp,
       provider: "copilot-cli",
     };
   }
   if (event.type === "assistant.message") {
-    const content = event.data.content;
-    if (typeof content !== "string") return null;
+    const content = extractContentText(event.data.content);
+    if (!content.trim()) return null;
     return {
       id: `copilot-cli:${sessionId}:${event.id}`,
       role: "assistant",
@@ -141,14 +167,15 @@ async function summarizeSession(sessionDir: string): Promise<SessionSummary | nu
   const events = await readEvents(sessionDir);
   const dirName = basename(sessionDir);
   const sessionId = meta.id || dirName;
+  const messages = events.map((event) => eventToMessage(event, sessionId)).filter(isMessage);
 
   // startedAt: workspace.yaml first, then session.start event timestamp
   const startEvent = events.find((e) => e.type === "session.start");
   const startedAt = meta.created_at || startEvent?.timestamp || "";
 
-  // lastMessageAt: workspace.yaml first, then last event
-  const lastEventTs = events.length > 0 ? events[events.length - 1].timestamp : "";
-  const lastMessageAt = meta.updated_at || lastEventTs || startedAt;
+  // lastMessageAt: workspace.yaml first, then last parsed message timestamp
+  const lastParsedMessageTs = messages.length > 0 ? messages[messages.length - 1].timestamp : "";
+  const lastMessageAt = meta.updated_at || lastParsedMessageTs || startedAt;
 
   // cwd: workspace.yaml first, then session.start data.context.cwd
   let cwd: string | null = meta.cwd ?? null;
@@ -160,9 +187,9 @@ async function summarizeSession(sessionDir: string): Promise<SessionSummary | nu
   // Title: workspace.yaml summary, else first user message, else "Untitled"
   let title = meta.summary?.trim() || "";
   if (!title) {
-    const firstUser = events.find((e) => e.type === "user.message");
-    if (firstUser && typeof firstUser.data.content === "string") {
-      title = firstUser.data.content.slice(0, 80).trim();
+    const firstUser = messages.find((message) => message.role === "user");
+    if (firstUser) {
+      title = firstUser.content.slice(0, 80).trim();
     }
   }
   if (!title) title = "Untitled";
@@ -172,7 +199,7 @@ async function summarizeSession(sessionDir: string): Promise<SessionSummary | nu
 
 export async function scanSessions(): Promise<Conversation[]> {
   if (!existsSync(PATHS.copilotCli.sessionState)) return [];
-  let entries;
+  let entries: Dirent[];
   try {
     entries = await readdir(PATHS.copilotCli.sessionState, { withFileTypes: true });
   } catch {
@@ -187,9 +214,9 @@ export async function scanSessions(): Promise<Conversation[]> {
     const summary = await summarizeSession(sessionDir);
     if (!summary) continue;
 
-    const messageCount = summary.events.filter(
-      (e) => e.type === "user.message" || e.type === "assistant.message",
-    ).length;
+    const messageCount = summary.events
+      .map((event) => eventToMessage(event, summary.sessionId))
+      .filter(isMessage).length;
 
     conversations.push({
       id: `copilot-cli:${summary.sessionId}`,

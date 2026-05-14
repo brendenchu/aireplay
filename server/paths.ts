@@ -45,6 +45,7 @@ export const PATHS = {
   codex: {
     root: join(HOME, ".codex"),
     history: join(HOME, ".codex", "history.jsonl"),
+    sessions: join(HOME, ".codex", "sessions"),
     memories: join(HOME, ".codex", "memories"),
     instructions: join(HOME, ".codex", "AGENTS.md"),
   },

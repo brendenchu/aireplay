@@ -13,14 +13,15 @@ async function getAllConversations(): Promise<Conversation[]> {
   const cached = cache.get<Conversation[]>("conversations:list");
   if (cached) return cached;
 
-  const [cc, cp, cpcli, gm] = await Promise.all([
+  const [cc, cp, cpcli, gm, cx] = await Promise.all([
     claudeCode.scanSessions(),
     copilot.scanSessions(),
     copilotCli.scanSessions(),
-    gemini.scanConversations(),
+    gemini.scanSessions(),
+    codex.scanSessions(),
   ]);
 
-  const all = [...cc, ...cp, ...cpcli, ...gm].sort((a, b) =>
+  const all = [...cc, ...cp, ...cpcli, ...gm, ...cx].sort((a, b) =>
     b.lastMessageAt.localeCompare(a.lastMessageAt),
   );
 
@@ -55,8 +56,7 @@ app.get("/", async (c) => {
 
 app.get("/:id", async (c) => {
   const id = c.req.param("id");
-  const [provider, ...rest] = id.split(":");
-  const _sessionId = rest.join(":");
+  const [provider] = id.split(":");
 
   // Find the conversation to get the file path
   const all = await getAllConversations();
@@ -73,10 +73,9 @@ app.get("/:id", async (c) => {
   } else if (provider === "copilot-cli") {
     detail = await copilotCli.parseSession(convo.filePath);
   } else if (provider === "gemini") {
-    detail = await gemini.parseConversation(convo.filePath);
+    detail = await gemini.parseSession(convo.filePath);
   } else if (provider === "codex") {
-    // Codex stores all sessions in one file — parse by session ID
-    detail = await codex.parseSession(rest.join(":"));
+    detail = await codex.parseSession(convo.filePath);
   }
 
   if (!detail) {
