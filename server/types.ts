@@ -33,27 +33,3 @@ export interface ClaudeHistoryEntry {
   };
 }
 
-export interface CopilotSessionWrapper {
-  kind: number;
-  v: {
-    version: number;
-    creationDate: number;
-    sessionId: string;
-    requests: CopilotRequest[];
-    inputState?: {
-      mode?: { id: string };
-      selectedModel?: { identifier: string };
-    };
-  };
-}
-
-export interface CopilotRequest {
-  message: string;
-  response?: CopilotResponse;
-  timestamp?: number;
-}
-
-export interface CopilotResponse {
-  message: string;
-  timestamp?: number;
-}
