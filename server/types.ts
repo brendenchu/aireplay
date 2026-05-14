@@ -32,4 +32,3 @@ export interface ClaudeHistoryEntry {
     content: string | ClaudeContentBlock[];
   };
 }
-

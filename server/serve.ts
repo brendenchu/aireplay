@@ -1,5 +1,5 @@
-import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
+import { createServer } from "node:http";
 import { extname, join, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { createApp } from "./index";
@@ -114,7 +114,10 @@ async function serveStatic(
       const fileType = await classify(resolved);
       if (fileType === "file") {
         const content = await readFile(resolved);
-        return { content, contentType: MIME_TYPES[extname(resolved)] ?? "application/octet-stream" };
+        return {
+          content,
+          contentType: MIME_TYPES[extname(resolved)] ?? "application/octet-stream",
+        };
       }
     }
   }
