@@ -37,6 +37,12 @@ const label = computed(() => PROVIDER_NAMES[props.provider] ?? props.provider);
   border-color: transparent;
 }
 
+.copilot-cli {
+  background: #0d948822;
+  color: #0d9488;
+  border-color: transparent;
+}
+
 .gemini {
   background: #4285f422;
   color: #4285f4;
