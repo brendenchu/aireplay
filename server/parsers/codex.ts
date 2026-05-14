@@ -261,13 +261,13 @@ function summarizeSessionFile(
 
   const firstUser = messages.find((message) => message.role === "user");
   const title =
-    historyTitles.get(sessionId) ?? truncateTitle(firstUser?.content.trim() ?? "") ?? "Untitled";
+    historyTitles.get(sessionId) || truncateTitle(firstUser?.content.trim() ?? "") || "Untitled";
 
   return {
     sessionId,
     projectPath,
     projectName,
-    title: title || "Untitled",
+    title,
     startedAt,
     lastMessageAt,
     messages,
