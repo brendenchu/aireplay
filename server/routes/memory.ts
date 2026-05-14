@@ -26,7 +26,7 @@ async function getAllMemoryFiles(): Promise<MemoryFile[]> {
     PARSERS.map((p) => p.scanMemoryFiles?.(knownProjectPaths) ?? []),
   );
   const all = groups.flat();
-  cache.set("memory:list", all, Date.now());
+  cache.set("memory:list", all);
   return all;
 }
 

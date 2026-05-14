@@ -1,26 +1,12 @@
-interface CacheEntry<T> {
-  data: T;
-  mtime: number;
-  cachedAt: number;
-}
-
 export class Cache {
-  private store = new Map<string, CacheEntry<unknown>>();
+  private store = new Map<string, unknown>();
 
   get<T>(key: string): T | null {
-    const entry = this.store.get(key);
-    if (!entry) return null;
-    return entry.data as T;
+    return (this.store.get(key) as T | undefined) ?? null;
   }
 
-  set<T>(key: string, data: T, mtime: number): void {
-    this.store.set(key, { data, mtime, cachedAt: Date.now() });
-  }
-
-  isStale(key: string, currentMtime: number): boolean {
-    const entry = this.store.get(key);
-    if (!entry) return true;
-    return currentMtime > entry.mtime;
+  set<T>(key: string, data: T): void {
+    this.store.set(key, data);
   }
 
   invalidate(key: string): void {

@@ -14,7 +14,7 @@ async function getAllConversations(): Promise<Conversation[]> {
   const groups = await Promise.all(PARSERS.map((p) => p.scanSessions()));
   const all = groups.flat().sort(compareLastMessageDesc);
 
-  cache.set("conversations:list", all, Date.now());
+  cache.set("conversations:list", all);
   return all;
 }
 

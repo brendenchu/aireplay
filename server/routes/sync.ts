@@ -32,10 +32,10 @@ async function runSync(providerFilter?: ProviderId) {
     }
 
     const existing = cache.get<Conversation[]>("conversations:list") ?? [];
-    cache.set("conversations:list", [...existing, ...conversations], Date.now());
+    cache.set("conversations:list", [...existing, ...conversations]);
     if (memoryFiles.length > 0) {
       const existingMem = cache.get<MemoryFile[]>("memory:list") ?? [];
-      cache.set("memory:list", [...existingMem, ...memoryFiles], Date.now());
+      cache.set("memory:list", [...existingMem, ...memoryFiles]);
     }
 
     results[parser.id] = {

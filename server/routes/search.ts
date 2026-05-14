@@ -66,7 +66,7 @@ function getOrBuildIndex(): MiniSearch {
     });
   }
 
-  cache.set("search:index", index, Date.now());
+  cache.set("search:index", index);
   return index;
 }
 
