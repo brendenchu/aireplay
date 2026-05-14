@@ -66,16 +66,16 @@ function copilotCliRootPath(): string {
 
 const COPILOT_CLI_ROOT = copilotCliRootPath();
 
+const COPILOT_ROOT = copilotStoragePath();
+
 export const PATHS = {
   claudeCode: {
     root: join(HOME, ".claude"),
     projects: join(HOME, ".claude", "projects"),
-    history: join(HOME, ".claude", "history.jsonl"),
     globalMemory: join(HOME, ".claude", "CLAUDE.md"),
-    settings: join(HOME, ".claude", "settings.json"),
   },
   copilot: {
-    workspaceStorage: copilotStoragePath(),
+    root: COPILOT_ROOT,
   },
   copilotCli: {
     root: COPILOT_CLI_ROOT,
@@ -83,16 +83,14 @@ export const PATHS = {
   },
   gemini: {
     root: GEMINI_ROOT,
-    settings: join(GEMINI_ROOT, "settings.json"),
-    projects: join(GEMINI_ROOT, "projects.json"),
     tmp: join(GEMINI_ROOT, "tmp"),
-    implicit: join(GEMINI_ROOT, "antigravity", "implicit"),
+    globalMemory: join(GEMINI_ROOT, "GEMINI.md"),
   },
   codex: {
     root: join(HOME, ".codex"),
-    history: join(HOME, ".codex", "history.jsonl"),
     sessions: join(HOME, ".codex", "sessions"),
+    history: join(HOME, ".codex", "history.jsonl"),
     memories: join(HOME, ".codex", "memories"),
-    instructions: join(HOME, ".codex", "AGENTS.md"),
+    globalMemory: join(HOME, ".codex", "AGENTS.md"),
   },
 } as const;

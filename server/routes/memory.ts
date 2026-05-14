@@ -3,6 +3,7 @@ import { stat, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import { Hono } from "hono";
 import type { MemoryFile } from "../../src/types/memory";
+import { isProviderId } from "../../src/types/provider";
 import { cache } from "../cache";
 import { PARSERS } from "../parsers";
 import { PATHS } from "../paths";
@@ -24,7 +25,7 @@ async function getAllMemoryFiles(): Promise<MemoryFile[]> {
 // Known provider root directories for path traversal guard
 const ALLOWED_ROOTS = [
   PATHS.claudeCode.root,
-  PATHS.copilot.workspaceStorage,
+  PATHS.copilot.root,
   PATHS.gemini.root,
   PATHS.codex.root,
 ];
@@ -43,6 +44,9 @@ app.get("/", async (c) => {
   let files = await getAllMemoryFiles();
 
   if (provider) {
+    if (!isProviderId(provider)) {
+      return c.json({ error: "Unknown provider" }, 400);
+    }
     files = files.filter((f) => f.provider === provider);
   }
 

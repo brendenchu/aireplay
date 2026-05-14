@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import type { Conversation } from "../../src/types/conversation";
-import type { ProviderId } from "../../src/types/provider";
+import { isProviderId } from "../../src/types/provider";
 import { cache } from "../cache";
-import { findParser, PARSERS } from "../parsers";
+import { findParserById, PARSERS } from "../parsers";
+import { compareLastMessageDesc } from "../parsers/_shared";
 
 const app = new Hono();
 
@@ -11,7 +12,7 @@ async function getAllConversations(): Promise<Conversation[]> {
   if (cached) return cached;
 
   const groups = await Promise.all(PARSERS.map((p) => p.scanSessions()));
-  const all = groups.flat().sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+  const all = groups.flat().sort(compareLastMessageDesc);
 
   cache.set("conversations:list", all, Date.now());
   return all;
@@ -27,6 +28,9 @@ app.get("/", async (c) => {
   let conversations = await getAllConversations();
 
   if (provider) {
+    if (!isProviderId(provider)) {
+      return c.json({ error: "Unknown provider" }, 400);
+    }
     conversations = conversations.filter((cv) => cv.provider === provider);
   }
   if (project) {
@@ -52,7 +56,7 @@ app.get("/:id", async (c) => {
     return c.json({ error: "Conversation not found" }, 404);
   }
 
-  const parser = findParser(provider as ProviderId);
+  const parser = findParserById(provider);
   const detail = await parser?.parseSession(convo.filePath);
 
   if (!detail) {

@@ -6,15 +6,20 @@ import { fileURLToPath } from "node:url";
 import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
-import { compareLastMessageDesc, type SessionParser, truncateTitle } from "./_shared";
+import {
+  compareLastMessageDesc,
+  flattenTextContent,
+  isRecord,
+  type ProviderParser,
+  truncateTitle,
+} from "./_shared";
 
 interface WorkspaceJson {
   folder?: string;
   workspace?: string;
 }
 
-// biome-ignore lint: flexible session shape from JSONL replay
-type SessionData = Record<string, any>;
+type SessionData = Record<string, unknown>;
 
 /**
  * Replay a Copilot JSONL changelog to reconstruct the full session state.
@@ -31,26 +36,28 @@ function replayChangelog(raw: string): SessionData {
   const lines = raw.split("\n").filter((l) => l.trim());
   if (lines.length === 0) return {};
 
-  const first = JSON.parse(lines[0]);
-  const session: SessionData = first.v ?? first;
+  const first: unknown = JSON.parse(lines[0]);
+  const firstObject = isRecord(first) ? first : {};
+  const session: SessionData = isRecord(firstObject.v) ? firstObject.v : firstObject;
 
   // Old format: single line with requests already populated
-  if (lines.length === 1 || (session.requests?.length ?? 0) > 0) {
+  if (lines.length === 1 || getRequests(session).length > 0) {
     return session;
   }
 
   // New incremental changelog format
   for (let i = 1; i < lines.length; i++) {
-    const entry = JSON.parse(lines[i]);
-    const kind: number = entry.kind;
-    const k: (string | number)[] | undefined = entry.k;
-    const v: unknown = entry.v;
+    const entry: unknown = JSON.parse(lines[i]);
+    if (!isRecord(entry)) continue;
+    const kind = typeof entry.kind === "number" ? entry.kind : null;
+    const k = Array.isArray(entry.k) ? entry.k.filter(isPathSegment) : undefined;
+    const v = entry.v;
 
     if (!Array.isArray(k) || k.length === 0) continue;
 
     if (kind === 1) {
       // SET: traverse path and set value at last key
-      let obj: SessionData = session;
+      let obj: unknown = session;
       for (let j = 0; j < k.length - 1; j++) {
         const key = k[j];
         if (typeof key === "number") {
@@ -58,17 +65,19 @@ function replayChangelog(raw: string): SessionData {
           while (obj.length <= key) obj.push(null);
           if (obj[key] == null) obj[key] = typeof k[j + 1] === "number" ? [] : {};
           obj = obj[key];
-        } else {
+        } else if (isRecord(obj)) {
           if (!(key in obj)) obj[key] = typeof k[j + 1] === "number" ? [] : {};
           obj = obj[key];
+        } else {
+          break;
         }
       }
       const last = k[k.length - 1];
       if (Array.isArray(obj) && typeof last === "number") {
         while (obj.length <= last) obj.push(null);
         obj[last] = v;
-      } else if (typeof obj === "object" && obj !== null) {
-        (obj as Record<string, unknown>)[last as string] = v;
+      } else if (isRecord(obj) && typeof last === "string") {
+        obj[last] = v;
       }
     } else if (kind === 2) {
       // PUSH: traverse path to target array, extend with v items
@@ -77,10 +86,9 @@ function replayChangelog(raw: string): SessionData {
         if (typeof key === "number" && Array.isArray(obj)) {
           while (obj.length <= key) obj.push(null);
           obj = obj[key];
-        } else if (typeof obj === "object" && obj !== null) {
-          const rec = obj as Record<string, unknown>;
-          if (!((key as string) in rec)) rec[key as string] = [];
-          obj = rec[key as string];
+        } else if (isRecord(obj) && typeof key === "string") {
+          if (!(key in obj)) obj[key] = [];
+          obj = obj[key];
         }
       }
       if (Array.isArray(obj) && Array.isArray(v)) {
@@ -92,17 +100,21 @@ function replayChangelog(raw: string): SessionData {
   return session;
 }
 
+function isPathSegment(value: unknown): value is string | number {
+  return typeof value === "string" || typeof value === "number";
+}
+
+function getRequests(session: SessionData): SessionData[] {
+  return Array.isArray(session.requests) ? session.requests.filter(isRecord) : [];
+}
+
 /**
  * Extract user message text from a request object.
  * Old format: `message` is a string.
  * New format: `message` is `{ text: string }`.
  */
 function extractMessageText(req: SessionData): string {
-  const msg = req.message;
-  if (!msg) return "";
-  if (typeof msg === "string") return msg;
-  if (typeof msg === "object" && msg.text) return msg.text;
-  return "";
+  return flattenTextContent(req.message);
 }
 
 /**
@@ -122,7 +134,7 @@ function extractResponseText(req: SessionData): string {
     for (const part of resp) {
       if (typeof part !== "object" || part === null) continue;
       // Markdown content parts have `value` but no `kind`
-      if (!("kind" in part) && part.value) {
+      if (!("kind" in part) && "value" in part && typeof part.value === "string") {
         textParts.push(part.value);
       }
     }
@@ -130,7 +142,7 @@ function extractResponseText(req: SessionData): string {
   }
 
   // Old format: object with message field
-  if (typeof resp === "object" && resp.message) return resp.message;
+  if (isRecord(resp) && resp.message) return flattenTextContent(resp.message);
   return JSON.stringify(resp);
 }
 
@@ -144,7 +156,7 @@ function decodeWorkspacePath(path: string): string {
 }
 
 export async function resolveWorkspaces(): Promise<Map<string, string>> {
-  const baseDir = PATHS.copilot.workspaceStorage;
+  const baseDir = PATHS.copilot.root;
   if (!existsSync(baseDir)) return new Map();
 
   const map = new Map<string, string>();
@@ -172,7 +184,7 @@ export async function resolveWorkspaces(): Promise<Map<string, string>> {
 }
 
 export async function scanSessions(): Promise<Conversation[]> {
-  const baseDir = PATHS.copilot.workspaceStorage;
+  const baseDir = PATHS.copilot.root;
   if (!existsSync(baseDir)) return [];
 
   const workspaces = await resolveWorkspaces();
@@ -199,15 +211,18 @@ export async function scanSessions(): Promise<Conversation[]> {
         const raw = await readFile(filePath, "utf-8");
         const session = replayChangelog(raw);
 
-        const requests = session.requests ?? [];
+        const requests = getRequests(session);
         if (requests.length === 0) continue;
 
         const title =
-          session.customTitle || truncateTitle(extractMessageText(requests[0])) || "Untitled";
+          (typeof session.customTitle === "string" ? session.customTitle : "") ||
+          truncateTitle(extractMessageText(requests[0])) ||
+          "Untitled";
 
-        const creationDate = session.creationDate
-          ? new Date(session.creationDate).toISOString()
-          : "";
+        const creationDate =
+          typeof session.creationDate === "number"
+            ? new Date(session.creationDate).toISOString()
+            : "";
 
         const stats = await stat(filePath);
 
@@ -281,7 +296,7 @@ async function walkMemories(
 }
 
 export async function scanMemoryFiles(): Promise<MemoryFile[]> {
-  const baseDir = PATHS.copilot.workspaceStorage;
+  const baseDir = PATHS.copilot.root;
   if (!existsSync(baseDir)) return [];
 
   const workspaces = await resolveWorkspaces();
@@ -309,9 +324,10 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
   try {
     const raw = await readFile(filePath, "utf-8");
     const session = replayChangelog(raw);
-    const sessionId = session.sessionId ?? basename(filePath, ".jsonl");
+    const sessionId =
+      typeof session.sessionId === "string" ? session.sessionId : basename(filePath, ".jsonl");
 
-    const requests = session.requests ?? [];
+    const requests = getRequests(session);
     if (requests.length === 0) return null;
 
     // Resolve workspace path from parent directories
@@ -331,7 +347,7 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
         id: `copilot:${sessionId}:${i * 2}`,
         role: "user",
         content: userText,
-        timestamp: req.timestamp ? new Date(req.timestamp).toISOString() : "",
+        timestamp: typeof req.timestamp === "number" ? new Date(req.timestamp).toISOString() : "",
         provider: "copilot",
       });
 
@@ -341,16 +357,19 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
           id: `copilot:${sessionId}:${i * 2 + 1}`,
           role: "assistant",
           content: responseText,
-          timestamp: req.timestamp ? new Date(req.timestamp).toISOString() : "",
+          timestamp: typeof req.timestamp === "number" ? new Date(req.timestamp).toISOString() : "",
           provider: "copilot",
         });
       }
     }
 
     const title =
-      session.customTitle || truncateTitle(extractMessageText(requests[0])) || "Untitled";
+      (typeof session.customTitle === "string" ? session.customTitle : "") ||
+      truncateTitle(extractMessageText(requests[0])) ||
+      "Untitled";
 
-    const creationDate = session.creationDate ? new Date(session.creationDate).toISOString() : "";
+    const creationDate =
+      typeof session.creationDate === "number" ? new Date(session.creationDate).toISOString() : "";
 
     const stats = await stat(filePath);
 
@@ -372,10 +391,10 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
   }
 }
 
-export const parser: SessionParser = {
+export const parser: ProviderParser = {
   id: "copilot",
   displayName: "VS Code Copilot",
-  available: () => existsSync(PATHS.copilot.workspaceStorage),
+  available: () => existsSync(PATHS.copilot.root),
   scanSessions,
   parseSession,
   scanMemoryFiles,

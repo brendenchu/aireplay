@@ -14,8 +14,8 @@ import {
   compareLastMessageDesc,
   flattenTextContent,
   isRecord,
+  type ProviderParser,
   parseJsonlLines,
-  type SessionParser,
   truncateTitle,
 } from "./_shared";
 
@@ -421,7 +421,7 @@ export async function parseSession(locator: string): Promise<ConversationDetail 
 export async function scanMemoryFiles(): Promise<MemoryFile[]> {
   const memoryFiles: MemoryFile[] = [];
 
-  const agentsMd = PATHS.codex.instructions;
+  const agentsMd = PATHS.codex.globalMemory;
   if (existsSync(agentsMd)) {
     try {
       const content = await readFile(agentsMd, "utf-8");
@@ -487,7 +487,7 @@ async function scanMemoriesDir(dir: string, memoryFiles: MemoryFile[]): Promise<
   }
 }
 
-export const parser: SessionParser = {
+export const parser: ProviderParser = {
   id: "codex",
   displayName: "Codex CLI",
   available: () => existsSync(PATHS.codex.root),

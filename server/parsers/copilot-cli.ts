@@ -8,8 +8,8 @@ import {
   compareLastMessageDesc,
   flattenTextContent,
   isRecord,
+  type ProviderParser,
   parseJsonlLines,
-  type SessionParser,
   truncateTitle,
 } from "./_shared";
 
@@ -237,7 +237,7 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
   };
 }
 
-export const parser: SessionParser = {
+export const parser: ProviderParser = {
   id: "copilot-cli",
   displayName: "Copilot CLI",
   available: () => existsSync(PATHS.copilotCli.root),

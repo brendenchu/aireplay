@@ -1,6 +1,14 @@
-export type ProviderId = "claude-code" | "copilot" | "copilot-cli" | "gemini" | "codex";
+export const PROVIDER_IDS = ["claude-code", "copilot", "copilot-cli", "gemini", "codex"] as const;
 
-export interface Provider {
+export type ProviderId = (typeof PROVIDER_IDS)[number];
+
+export type ProviderFilter = ProviderId | "all";
+
+export function isProviderId(value: string | null | undefined): value is ProviderId {
+  return PROVIDER_IDS.includes(value as ProviderId);
+}
+
+export interface ProviderStatus {
   id: ProviderId;
   name: string;
   available: boolean;

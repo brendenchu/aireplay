@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import MiniSearch from "minisearch";
 import type { Conversation } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
+import { isProviderId } from "../../src/types/provider";
 import type { SearchResult } from "../../src/types/search";
 import { cache } from "../cache";
 
@@ -78,6 +79,10 @@ app.get("/", (c) => {
   const provider = c.req.query("provider");
   const type = c.req.query("type") ?? "all";
   const limit = parseInt(c.req.query("limit") ?? "20", 10);
+
+  if (provider && !isProviderId(provider)) {
+    return c.json({ error: "Unknown provider" }, 400);
+  }
 
   try {
     const index = getOrBuildIndex();

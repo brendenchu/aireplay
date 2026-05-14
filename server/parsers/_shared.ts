@@ -4,7 +4,7 @@
  * between parsers (line parsing, title truncation, content flattening, sort).
  */
 
-import type { Conversation, ConversationDetail } from "../../src/types/conversation";
+import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import type { ProviderId } from "../../src/types/provider";
 
@@ -13,7 +13,7 @@ import type { ProviderId } from "../../src/types/provider";
  * a switch over provider id. `available` reflects whether the provider's
  * on-disk root exists; routes skip scanning when false.
  */
-export interface SessionParser {
+export interface ProviderParser {
   id: ProviderId;
   displayName: string;
   available(): boolean;
@@ -24,6 +24,10 @@ export interface SessionParser {
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function isMessageRole(value: unknown): value is Message["role"] {
+  return value === "user" || value === "assistant" || value === "system";
 }
 
 /**

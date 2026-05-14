@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs";
 import { existsSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
@@ -8,7 +9,7 @@ import {
   compareLastMessageDesc,
   flattenTextContent,
   isRecord,
-  type SessionParser,
+  type ProviderParser,
   truncateTitle,
 } from "./_shared";
 
@@ -192,7 +193,7 @@ interface WorkspaceInfo {
 
 async function discoverWorkspaces(): Promise<WorkspaceInfo[]> {
   if (!existsSync(PATHS.gemini.tmp)) return [];
-  let entries;
+  let entries: Dirent[];
   try {
     entries = await readdir(PATHS.gemini.tmp, { withFileTypes: true });
   } catch {
@@ -216,7 +217,7 @@ export async function scanSessions(): Promise<Conversation[]> {
     const chatsDir = join(PATHS.gemini.tmp, ws.name, "chats");
     if (!existsSync(chatsDir)) continue;
 
-    let files;
+    let files: Dirent[];
     try {
       files = await readdir(chatsDir, { withFileTypes: true });
     } catch {
@@ -292,10 +293,10 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
   };
 }
 
-export async function scanGeminiMdFiles(workspacePaths?: string[]): Promise<MemoryFile[]> {
+export async function scanMemoryFiles(workspacePaths?: string[]): Promise<MemoryFile[]> {
   const memoryFiles: MemoryFile[] = [];
 
-  const globalGemini = join(PATHS.gemini.root, "GEMINI.md");
+  const globalGemini = PATHS.gemini.globalMemory;
   if (existsSync(globalGemini)) {
     try {
       const content = await readFile(globalGemini, "utf-8");
@@ -321,9 +322,7 @@ export async function scanGeminiMdFiles(workspacePaths?: string[]): Promise<Memo
   // Callers can pass an explicit list to extend or override.
   const paths =
     workspacePaths ??
-    (await discoverWorkspaces())
-      .map((ws) => ws.projectPath)
-      .filter((p): p is string => p !== null);
+    (await discoverWorkspaces()).map((ws) => ws.projectPath).filter((p): p is string => p !== null);
 
   for (const wsPath of paths) {
     const geminiMd = join(wsPath, "GEMINI.md");
@@ -352,11 +351,11 @@ export async function scanGeminiMdFiles(workspacePaths?: string[]): Promise<Memo
   return memoryFiles;
 }
 
-export const parser: SessionParser = {
+export const parser: ProviderParser = {
   id: "gemini",
   displayName: "Gemini CLI",
   available: () => existsSync(PATHS.gemini.root),
   scanSessions,
   parseSession,
-  scanMemoryFiles: () => scanGeminiMdFiles(),
+  scanMemoryFiles,
 };

@@ -13,9 +13,10 @@ import type { ClaudeCodeJsonlEntry, ClaudeContentBlock } from "../types";
 import {
   compareLastMessageDesc,
   flattenTextContent,
+  isMessageRole,
   isRecord,
+  type ProviderParser,
   parseJsonlLines as parseJsonl,
-  type SessionParser,
   truncateTitle,
 } from "./_shared";
 
@@ -145,17 +146,20 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
     const firstUser = messageEntries.find((e) => e.type === "user");
     const firstUserText = firstUser?.message ? flattenTextContent(firstUser.message.content) : "";
 
-    const messages: Message[] = messageEntries.map((entry, index) => ({
-      id: `claude-code:${sessionId}:${index}`,
-      role: entry.message?.role as Message["role"],
-      content: entry.message?.content ? flattenTextContent(entry.message.content) : "",
-      timestamp: entry.timestamp ?? "",
-      provider: "claude-code" as const,
-      toolCalls:
-        entry.type === "assistant" && entry.message?.content
-          ? extractToolCalls(entry.message.content)
-          : undefined,
-    }));
+    const messages: Message[] = messageEntries.map((entry, index) => {
+      const role = isMessageRole(entry.message?.role) ? entry.message.role : "system";
+      return {
+        id: `claude-code:${sessionId}:${index}`,
+        role,
+        content: entry.message?.content ? flattenTextContent(entry.message.content) : "",
+        timestamp: entry.timestamp ?? "",
+        provider: "claude-code",
+        toolCalls:
+          entry.type === "assistant" && entry.message?.content
+            ? extractToolCalls(entry.message.content)
+            : undefined,
+      };
+    });
 
     const timestamps = messageEntries.map((m) => m.timestamp).filter(Boolean) as string[];
 
@@ -246,7 +250,7 @@ export async function scanMemoryFiles(): Promise<MemoryFile[]> {
   return memoryFiles;
 }
 
-export const parser: SessionParser = {
+export const parser: ProviderParser = {
   id: "claude-code",
   displayName: "Claude Code",
   available: () => existsSync(PATHS.claudeCode.root),
