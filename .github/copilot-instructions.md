@@ -1,43 +1,85 @@
 # aireplay Copilot Instructions
 
-## Build, test, and lint commands
+Local-only AI conversation and memory browser. No database: provider files are parsed on demand and cached in memory.
 
-- `bun run dev` — start the Vite dev server on `localhost:4123` with the Hono API mounted in-process.
-- `bun run build` — run `vue-tsc --noEmit`, build the client, then build the SSR server entry (`dist/server/serve.mjs`).
-- `bun run preview` — preview the production client build.
-- `bun run lint` — run Biome checks.
-- `bun run lint:fix` — apply Biome autofixes.
-- `bun run typecheck` — run TypeScript checks only.
+## Stack
 
-There is currently no automated test runner configured in this repository, so there is no single-test command yet.
+- Bun runtime, Vite 8 dev server, Hono API mounted through the Vite plugin, Vue 3.5 + TypeScript
+- MiniSearch for server-side full-text search
+- Default dev port: 4123
 
-## High-level architecture
+## Commands
 
-- This app is intentionally **local-only** and **database-free**. It parses provider files from disk on demand (`~/.claude`, VS Code workspace storage, `~/.copilot`, `~/.gemini`, `~/.codex`) and caches results in memory.
-- API and frontend run in one process during development: `vite.config.ts` mounts Hono under `/api` via `configureServer` and `configurePreviewServer`; there is no separate API service.
-- Production packaging is split:
-  - Vite client assets in `dist/`
-  - SSR server bundle at `dist/server/serve.mjs` (built by `build-server.mjs` from `server/serve.ts`)
-- Server flow:
-  - `server/index.ts` builds the Hono app with `/api/*` routes.
-  - A lazy-sync middleware triggers `runSync()` on first request if conversation cache is empty.
-  - `server/routes/sync.ts` scans providers and refreshes conversation/memory/search caches.
-  - `server/routes/search.ts` builds an in-memory MiniSearch index from cached conversations and memory files.
-- Frontend flow:
-  - Vue SPA routes are in `src/router.ts`.
-  - Route pages in `src/pages/*` call `/api/*` directly with `fetch`.
-  - Shared domain types live in `src/types/*` and are imported by both server and frontend.
+- `bun run dev` - start the Vite dev server
+- `bun run check` - run Biome checks and TypeScript checks
+- `bun run lint` - run Biome checks only
+- `bun run typecheck` - run `vue-tsc --noEmit`
+- `bun run build` - type-check, build client/server bundles, and run `build-server.mjs`
+- `bun run preview` - preview the production build
 
-## Key repository conventions
+Prefer `bun run check` for normal verification and `bun run build` before finishing changes that affect routing, bundling, server imports, or package output.
 
-- Keep the project database-free: new features should read provider files and use cache updates, not persistent app storage.
-- Provider parser contract in `server/parsers/*`:
-  - each provider exports session scanning + detail parsing functions (naming differs by provider, e.g. `scanSessions`, `scanConversations`, `parseSession`, `parseConversation`);
-  - memory-capable providers export memory scanning functions;
-  - missing or malformed files are handled defensively (skip bad entries, return `[]`/`null` instead of throwing).
-- IDs are provider-prefixed strings and are treated as cross-route stable identifiers (for conversations/messages/memory files), e.g. `claude-code:...`, `copilot:...`, `copilot-cli:...`, `gemini:...`, `codex:...`.
-- Memory writes are restricted to known provider roots (`server/routes/memory.ts` path traversal guard). Keep this guard intact when adding writable file locations.
-- Cache invalidation expectations:
-  - sync endpoints invalidate `conversations:list`, `memory:list`, and `search:index`;
-  - search results depend on those cached lists, so schema changes in conversations/memory often require search indexing updates too.
-- Project grouping is path-based and encoded as base64url IDs (`server/routes/projects.ts`); preserve `encodeProjectId`/`decodeProjectId` behavior for route compatibility.
+## Architecture
+
+- `server/` - Hono API and provider parsers. It runs inside Vite's Node process in development.
+- `server/index.ts` - creates the `/api` app and performs lazy sync when conversation cache is empty.
+- `server/parsers/` - one adapter per AI provider plus shared helpers.
+- `server/parsers/_shared.ts` - shared parser helpers and the `ProviderParser` interface.
+- `server/parsers/index.ts` - provider registry. Routes should iterate `PARSERS` or call `findParserById()` instead of hardcoding provider switches.
+- `server/routes/` - REST endpoints for conversations, projects, memory, search, and sync.
+- `server/cache.ts` - in-memory cache. There is no persistent app database.
+- `server/paths.ts` - all provider filesystem paths derived from `homedir()` and environment overrides.
+- `src/` - Vue SPA. Pages fetch from `/api/*`; shared response/domain types live in `src/types/`.
+
+## Provider Model
+
+- Provider IDs are defined once in `src/types/provider.ts` as `PROVIDER_IDS`.
+- Use `ProviderId` for persisted/provider-owned data and `ProviderFilter` for UI filters that may include `"all"`.
+- Validate untrusted provider strings with `isProviderId()` before filtering or dispatching.
+- Use `ProviderStatus` for `/api/sync/status` UI data. Do not call it `Provider`; the backend adapter is `ProviderParser`.
+- Every provider parser exports `parser: ProviderParser`.
+- Parser method names should stay uniform:
+  - `scanSessions(): Promise<Conversation[]>`
+  - `parseSession(filePath: string): Promise<ConversationDetail | null>`
+  - optional `scanMemoryFiles(knownProjectPaths?: string[]): Promise<MemoryFile[]>`
+
+## Provider Paths
+
+- Keep provider root names consistent in `PATHS`:
+  - `root` - provider root or storage root
+  - `globalMemory` - provider-level memory/instructions file
+  - provider-specific subpaths such as `projects`, `sessions`, `history`, `memories`, or `sessionState`
+- Do not rederive `homedir()` paths inside parsers or routes. Add names to `server/paths.ts` and consume `PATHS`.
+
+## Parser Conventions
+
+- Provider parsers must handle missing/corrupt files gracefully: return empty arrays, `null`, or skip bad entries.
+- Keep provider-specific file format knowledge inside the provider parser.
+- Prefer helpers from `_shared.ts` for JSONL parsing, record guards, content flattening, title truncation, message-role validation, and recency sorting.
+- Avoid `any` for provider data. Parse as `unknown`, narrow with guards, and keep fallback behavior tolerant.
+- Conversation IDs are prefixed with provider ID: `claude-code:{sessionId}`, `copilot:{sessionId}`, `copilot-cli:{sessionId}`, `gemini:{sessionId}`, `codex:{sessionId}`.
+- `filePath` on `Conversation` should point to the source transcript file that `parseSession()` can read.
+
+## Route Conventions
+
+- Routes should use the provider registry rather than importing individual provider parsers.
+- Query/body provider values are untrusted strings. Validate with `isProviderId()`.
+- Lazy sync is intentional: first API request triggers a scan if the conversation cache is empty.
+- Sync operations should invalidate `conversations:list`, `memory:list`, and `search:index`.
+- Memory writes must keep the path traversal guard. Only write files under known provider roots.
+- Project IDs in `server/routes/projects.ts` are base64url-encoded paths; preserve compatibility.
+- Search currently indexes conversation titles and memory file content. Do not assume full conversation body search exists unless implemented.
+
+## Frontend Conventions
+
+- Reuse domain types from `src/types/`.
+- Use `ProviderFilter` for select state that includes `"all"`.
+- Use `ProviderBadge` for provider display names rather than duplicating labels.
+- Keep shadcn-vue/reka UI wrapper components formatted by Biome; avoid manual style divergence.
+
+## Safety
+
+- This is a local tool with no authentication. Keep server binding local unless the user explicitly changes it.
+- Do not introduce a database or background persistence layer. The product premise is reading provider files on disk.
+- Memory files are writable by design, but conversation files should remain read-only.
+- Do not log conversation or memory contents during diagnostics unless the user explicitly asks.
