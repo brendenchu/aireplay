@@ -17,6 +17,7 @@ import {
   parseJsonlLines,
   readGlobalMemoryFile,
   truncateTitle,
+  walkMarkdownFiles,
 } from "./_shared";
 
 /**
@@ -424,48 +425,24 @@ export async function scanMemoryFiles(): Promise<MemoryFile[]> {
   const agentsMd = await readGlobalMemoryFile("codex", PATHS.codex.globalMemory);
   if (agentsMd) memoryFiles.push(agentsMd);
 
-  if (existsSync(PATHS.codex.memories)) {
-    try {
-      await scanMemoriesDir(PATHS.codex.memories, memoryFiles);
-    } catch {
-      // skip corrupt memory trees
-    }
-  }
+  await walkMarkdownFiles(PATHS.codex.memories, async (fullPath, stats) => {
+    const content = await readFile(fullPath, "utf-8");
+    const relativePath = relative(PATHS.codex.root, fullPath);
+    memoryFiles.push({
+      id: `codex:${relativePath}`,
+      provider: "codex",
+      filePath: fullPath,
+      relativePath,
+      projectPath: null,
+      projectName: null,
+      name: basename(fullPath),
+      content,
+      updatedAt: stats.mtime.toISOString(),
+      sizeBytes: stats.size,
+    });
+  });
 
   return memoryFiles;
-}
-
-async function scanMemoriesDir(dir: string, memoryFiles: MemoryFile[]): Promise<void> {
-  const entries = await readdir(dir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const fullPath = join(dir, entry.name);
-
-    if (entry.isFile() && entry.name.endsWith(".md")) {
-      try {
-        const content = await readFile(fullPath, "utf-8");
-        const stats = await stat(fullPath);
-        const relativePath = relative(PATHS.codex.root, fullPath);
-
-        memoryFiles.push({
-          id: `codex:${relativePath}`,
-          provider: "codex",
-          filePath: fullPath,
-          relativePath,
-          projectPath: null,
-          projectName: null,
-          name: entry.name,
-          content,
-          updatedAt: stats.mtime.toISOString(),
-          sizeBytes: stats.size,
-        });
-      } catch {
-        // skip unreadable files
-      }
-    } else if (entry.isDirectory()) {
-      await scanMemoriesDir(fullPath, memoryFiles);
-    }
-  }
 }
 
 export const parser: ProviderParser = {

@@ -4,9 +4,10 @@
  * between parsers (line parsing, title truncation, content flattening, sort).
  */
 
+import type { Dirent, Stats } from "node:fs";
 import { existsSync } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
-import { basename } from "node:path";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { basename, join } from "node:path";
 import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import type { ProviderId } from "../../src/types/provider";
@@ -127,5 +128,37 @@ export async function readGlobalMemoryFile(
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Walk a directory tree depth-first and invoke `onFile` for each `.md` file.
+ * Missing or unreadable directories are skipped silently — matches existing
+ * parser tolerance for absent provider data.
+ */
+export async function walkMarkdownFiles(
+  dir: string,
+  onFile: (fullPath: string, stats: Stats) => Promise<void> | void,
+): Promise<void> {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await walkMarkdownFiles(fullPath, onFile);
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+    try {
+      const stats = await stat(fullPath);
+      await onFile(fullPath, stats);
+    } catch {
+      // skip unreadable
+    }
   }
 }
