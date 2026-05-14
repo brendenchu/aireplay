@@ -4,6 +4,12 @@ import { basename, dirname, extname, join } from "node:path";
 import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
+import {
+  compareLastMessageDesc,
+  flattenTextContent,
+  isRecord,
+  truncateTitle,
+} from "./_shared";
 
 /**
  * Gemini CLI / Antigravity stores chat sessions under
@@ -41,27 +47,10 @@ interface ParsedSession {
   messages: RawMessage[];
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function normalizeRole(type: string): Message["role"] {
   if (type === "user") return "user";
   if (type === "model" || type === "assistant") return "assistant";
   return "system";
-}
-
-function flattenContent(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((part) => {
-      if (typeof part === "string") return part;
-      if (isRecord(part) && typeof part.text === "string") return part.text;
-      return "";
-    })
-    .filter(Boolean)
-    .join("\n");
 }
 
 function toRawMessage(obj: Record<string, unknown>): RawMessage | null {
@@ -181,21 +170,16 @@ async function readProjectRoot(workspaceDir: string): Promise<string | null> {
   }
 }
 
-function truncate(str: string, max: number): string {
-  if (str.length <= max) return str;
-  return `${str.slice(0, max).trimEnd()}…`;
-}
-
 function deriveTitle(messages: RawMessage[], fallback: string): string {
   const firstUser = messages.find((m) => m.type === "user");
   if (firstUser) {
-    const text = flattenContent(firstUser.content).trim();
-    if (text) return truncate(text, 80);
+    const text = flattenTextContent(firstUser.content).trim();
+    if (text) return truncateTitle(text);
   }
   const firstNonInfo = messages.find((m) => m.type !== "info");
   if (firstNonInfo) {
-    const text = flattenContent(firstNonInfo.content).trim();
-    if (text) return truncate(text, 80);
+    const text = flattenTextContent(firstNonInfo.content).trim();
+    if (text) return truncateTitle(text);
   }
   return fallback || "Untitled";
 }
@@ -266,7 +250,7 @@ export async function scanSessions(): Promise<Conversation[]> {
     }
   }
 
-  return conversations.sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+  return conversations.sort(compareLastMessageDesc);
 }
 
 export async function parseSession(filePath: string): Promise<ConversationDetail | null> {
@@ -280,13 +264,15 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
   const projectPath = await readProjectRoot(wsDir);
   const stats = await stat(filePath).catch(() => null);
 
-  const messages: Message[] = parsed.messages.map((m) => ({
-    id: `gemini:${parsed.header.sessionId}:${m.id}`,
-    role: normalizeRole(m.type),
-    content: flattenContent(m.content),
-    timestamp: m.timestamp,
-    provider: "gemini" as const,
-  }));
+  const messages: Message[] = parsed.messages
+    .map((m) => ({
+      id: `gemini:${parsed.header.sessionId}:${m.id}`,
+      role: normalizeRole(m.type),
+      content: flattenTextContent(m.content),
+      timestamp: m.timestamp,
+      provider: "gemini" as const,
+    }))
+    .filter((m) => m.content.trim());
 
   const sessionId = parsed.header.sessionId || basename(filePath);
 

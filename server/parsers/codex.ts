@@ -10,6 +10,13 @@ import type {
 } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
+import {
+  compareLastMessageDesc,
+  flattenTextContent,
+  isRecord,
+  parseJsonlLines,
+  truncateTitle,
+} from "./_shared";
 
 /**
  * Codex stores the browsable transcript in `~/.codex/sessions/YYYY/MM/DD/*.jsonl`.
@@ -40,15 +47,6 @@ interface SessionMeta {
   filePath: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function truncate(str: string, max: number): string {
-  if (str.length <= max) return str;
-  return `${str.slice(0, max).trimEnd()}...`;
-}
-
 function toIsoTimestamp(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value !== "number") return "";
@@ -57,20 +55,6 @@ function toIsoTimestamp(value: unknown): string {
   // on column. Accept both so fallback data stays stable across versions.
   const millis = value > 10_000_000_000 ? value : value * 1000;
   return new Date(millis).toISOString();
-}
-
-function parseJsonlLines(raw: string): unknown[] {
-  const entries: unknown[] = [];
-  for (const line of raw.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      entries.push(JSON.parse(trimmed));
-    } catch {
-      // skip malformed lines
-    }
-  }
-  return entries;
 }
 
 function parseHistoryLines(raw: string): HistoryEntry[] {
@@ -100,7 +84,7 @@ async function readHistoryTitleMap(): Promise<Map<string, string>> {
     const raw = await readFile(PATHS.codex.history, "utf-8");
     for (const entry of parseHistoryLines(raw)) {
       if (!titles.has(entry.session_id)) {
-        titles.set(entry.session_id, truncate(entry.text.trim(), 80) || "Untitled");
+        titles.set(entry.session_id, truncateTitle(entry.text.trim()) || "Untitled");
       }
     }
   } catch {
@@ -154,19 +138,6 @@ function sessionIdFromFile(filePath: string): string {
   return match?.[1] ?? file;
 }
 
-function extractContentText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-
-  return content
-    .map((item) => {
-      if (!isRecord(item)) return "";
-      return typeof item.text === "string" ? item.text : "";
-    })
-    .filter(Boolean)
-    .join("\n");
-}
-
 function codexRoleToMessageRole(role: unknown): Message["role"] | null {
   if (role === "user" || role === "assistant" || role === "system") return role;
   if (role === "developer") return "system";
@@ -200,7 +171,7 @@ function parseResponseMessage(
   const role = codexRoleToMessageRole(entry.payload.role);
   if (!role) return null;
 
-  const content = extractContentText(entry.payload.content);
+  const content = flattenTextContent(entry.payload.content);
   if (!content.trim()) return null;
 
   return {
@@ -290,7 +261,7 @@ function summarizeSessionFile(
 
   const firstUser = messages.find((message) => message.role === "user");
   const title =
-    historyTitles.get(sessionId) ?? truncate(firstUser?.content.trim() ?? "", 80) ?? "Untitled";
+    historyTitles.get(sessionId) ?? truncateTitle(firstUser?.content.trim() ?? "") ?? "Untitled";
 
   return {
     sessionId,
@@ -353,7 +324,7 @@ export async function scanSessions(): Promise<Conversation[]> {
   }
 
   if (conversations.length > 0) {
-    return conversations.sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+    return conversations.sort(compareLastMessageDesc);
   }
 
   // Fallback for old installs that only expose prompt history.
@@ -375,14 +346,14 @@ export async function scanSessions(): Promise<Conversation[]> {
         sessionId,
         projectPath: null,
         projectName: null,
-        title: truncate(entries[0]?.text.trim() ?? "", 80) || "Untitled",
+        title: truncateTitle(entries[0]?.text.trim() ?? "") || "Untitled",
         startedAt,
         lastMessageAt,
         messageCount: entries.length,
         filePath: PATHS.codex.history,
       });
     }
-    return conversations.sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+    return conversations.sort(compareLastMessageDesc);
   } catch {
     return [];
   }
@@ -434,7 +405,7 @@ export async function parseSession(locator: string): Promise<ConversationDetail 
       sessionId: locator,
       projectPath: null,
       projectName: null,
-      title: truncate(entries[0]?.text.trim() ?? "", 80) || "Untitled",
+      title: truncateTitle(entries[0]?.text.trim() ?? "") || "Untitled",
       startedAt: messages[0]?.timestamp ?? "",
       lastMessageAt: messages[messages.length - 1]?.timestamp ?? "",
       messageCount: messages.length,

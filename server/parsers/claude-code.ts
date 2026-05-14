@@ -10,6 +10,13 @@ import type {
 import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
 import type { ClaudeCodeJsonlEntry, ClaudeContentBlock } from "../types";
+import {
+  compareLastMessageDesc,
+  flattenTextContent,
+  isRecord,
+  parseJsonlLines as parseJsonl,
+  truncateTitle,
+} from "./_shared";
 
 export function decodePath(encoded: string): string {
   // `-Users-brendenchu-Workspaces` → `/Users/brendenchu/Workspaces`
@@ -19,14 +26,6 @@ export function decodePath(encoded: string): string {
 
 export function encodePath(decoded: string): string {
   return decoded.replace(/\//g, "-");
-}
-
-function extractTextContent(content: string | ClaudeContentBlock[]): string {
-  if (typeof content === "string") return content;
-  return content
-    .filter((b) => b.type === "text" && b.text)
-    .map((b) => b.text as string)
-    .join("\n");
 }
 
 function extractToolCalls(content: string | ClaudeContentBlock[]): ToolCall[] {
@@ -40,22 +39,10 @@ function extractToolCalls(content: string | ClaudeContentBlock[]): ToolCall[] {
     }));
 }
 
-function truncate(str: string, max: number): string {
-  if (str.length <= max) return str;
-  return `${str.slice(0, max).trimEnd()}…`;
-}
-
 function parseJsonlLines(raw: string): ClaudeCodeJsonlEntry[] {
-  const entries: ClaudeCodeJsonlEntry[] = [];
-  for (const line of raw.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      entries.push(JSON.parse(line));
-    } catch {
-      // skip malformed lines
-    }
-  }
-  return entries;
+  return parseJsonl<ClaudeCodeJsonlEntry>(raw, (v) =>
+    isRecord(v) && typeof v.type === "string" ? (v as unknown as ClaudeCodeJsonlEntry) : null,
+  );
 }
 
 function isMessageEntry(e: ClaudeCodeJsonlEntry): boolean {
@@ -111,10 +98,10 @@ export async function scanSessions(): Promise<Conversation[]> {
 
         const firstUser = messages.find((e) => e.type === "user");
         const firstUserText = firstUser?.message
-          ? extractTextContent(firstUser.message.content)
+          ? flattenTextContent(firstUser.message.content)
           : "";
 
-        const title = aiTitle ?? (truncate(firstUserText, 80) || "Untitled");
+        const title = aiTitle ?? (truncateTitle(firstUserText) || "Untitled");
 
         const timestamps = messages.map((m) => m.timestamp).filter(Boolean) as string[];
 
@@ -136,7 +123,7 @@ export async function scanSessions(): Promise<Conversation[]> {
     }
   }
 
-  return conversations.sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+  return conversations.sort(compareLastMessageDesc);
 }
 
 export async function parseSession(filePath: string): Promise<ConversationDetail | null> {
@@ -155,12 +142,12 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
     if (messageEntries.length === 0) return null;
 
     const firstUser = messageEntries.find((e) => e.type === "user");
-    const firstUserText = firstUser?.message ? extractTextContent(firstUser.message.content) : "";
+    const firstUserText = firstUser?.message ? flattenTextContent(firstUser.message.content) : "";
 
     const messages: Message[] = messageEntries.map((entry, index) => ({
       id: `claude-code:${sessionId}:${index}`,
       role: entry.message?.role as Message["role"],
-      content: entry.message?.content ? extractTextContent(entry.message.content) : "",
+      content: entry.message?.content ? flattenTextContent(entry.message.content) : "",
       timestamp: entry.timestamp ?? "",
       provider: "claude-code" as const,
       toolCalls:
@@ -177,7 +164,7 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
       sessionId,
       projectPath,
       projectName,
-      title: aiTitle ?? (truncate(firstUserText, 80) || "Untitled"),
+      title: aiTitle ?? (truncateTitle(firstUserText) || "Untitled"),
       startedAt: timestamps[0] ?? "",
       lastMessageAt: timestamps[timestamps.length - 1] ?? "",
       messageCount: messages.length,
@@ -204,7 +191,7 @@ export async function scanMemoryFiles(): Promise<MemoryFile[]> {
 
     const files = await readdir(memoryDir);
     const projectPath = decodePath(folder.name);
-    const projectName = projectPath.split("/").pop() ?? projectPath;
+    const projectName = basename(projectPath);
 
     for (const file of files) {
       if (!file.endsWith(".md")) continue;

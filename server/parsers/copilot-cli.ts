@@ -4,6 +4,13 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
 import { PATHS } from "../paths";
+import {
+  compareLastMessageDesc,
+  flattenTextContent,
+  isRecord,
+  parseJsonlLines,
+  truncateTitle,
+} from "./_shared";
 
 /**
  * Standalone GitHub Copilot CLI (the new agentic terminal CLI, not `gh copilot`).
@@ -33,33 +40,8 @@ interface CopilotEvent {
   parentId: string | null;
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
 function isMessage(value: Message | null): value is Message {
   return value !== null;
-}
-
-function extractContentText(value: unknown): string {
-  if (typeof value === "string") return value;
-
-  if (isRecord(value)) {
-    if (typeof value.text === "string") return value.text;
-    if (typeof value.content === "string") return value.content;
-    return "";
-  }
-
-  if (!Array.isArray(value)) return "";
-
-  return value
-    .map((part) => {
-      if (typeof part === "string") return part;
-      if (isRecord(part) && typeof part.text === "string") return part.text;
-      return "";
-    })
-    .filter(Boolean)
-    .join("\n");
 }
 
 /**
@@ -100,32 +82,22 @@ async function readEvents(sessionDir: string): Promise<CopilotEvent[]> {
   } catch {
     return [];
   }
-  const events: CopilotEvent[] = [];
-  for (const line of raw.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    let obj: unknown;
-    try {
-      obj = JSON.parse(trimmed);
-    } catch {
-      continue;
-    }
-    if (!isRecord(obj)) continue;
-    if (typeof obj.type !== "string" || typeof obj.id !== "string") continue;
-    events.push({
+  return parseJsonlLines<CopilotEvent>(raw, (obj) => {
+    if (!isRecord(obj)) return null;
+    if (typeof obj.type !== "string" || typeof obj.id !== "string") return null;
+    return {
       type: obj.type,
       data: isRecord(obj.data) ? obj.data : {},
       id: obj.id,
       timestamp: typeof obj.timestamp === "string" ? obj.timestamp : "",
       parentId: typeof obj.parentId === "string" ? obj.parentId : null,
-    });
-  }
-  return events;
+    };
+  });
 }
 
 function eventToMessage(event: CopilotEvent, sessionId: string): Message | null {
   if (event.type === "user.message") {
-    const content = extractContentText(event.data.content);
+    const content = flattenTextContent(event.data.content);
     const transformedContent =
       typeof event.data.transformedContent === "string" ? event.data.transformedContent : "";
     const finalContent = content.trim() ? content : transformedContent;
@@ -139,7 +111,7 @@ function eventToMessage(event: CopilotEvent, sessionId: string): Message | null 
     };
   }
   if (event.type === "assistant.message") {
-    const content = extractContentText(event.data.content);
+    const content = flattenTextContent(event.data.content);
     if (!content.trim()) return null;
     return {
       id: `copilot-cli:${sessionId}:${event.id}`,
@@ -189,7 +161,7 @@ async function summarizeSession(sessionDir: string): Promise<SessionSummary | nu
   if (!title) {
     const firstUser = messages.find((message) => message.role === "user");
     if (firstUser) {
-      title = firstUser.content.slice(0, 80).trim();
+      title = truncateTitle(firstUser.content);
     }
   }
   if (!title) title = "Untitled";
@@ -232,7 +204,7 @@ export async function scanSessions(): Promise<Conversation[]> {
     });
   }
 
-  return conversations.sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+  return conversations.sort(compareLastMessageDesc);
 }
 
 export async function parseSession(filePath: string): Promise<ConversationDetail | null> {

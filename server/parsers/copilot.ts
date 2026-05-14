@@ -4,6 +4,7 @@ import { basename, join, relative } from "node:path";
 import type { Conversation, ConversationDetail, Message } from "../../src/types/conversation";
 import type { MemoryFile } from "../../src/types/memory";
 import { PATHS } from "../paths";
+import { compareLastMessageDesc, truncateTitle } from "./_shared";
 
 interface WorkspaceJson {
   folder?: string;
@@ -178,7 +179,7 @@ export async function scanSessions(): Promise<Conversation[]> {
     if (!existsSync(sessionsDir)) continue;
 
     const workspacePath = workspaces.get(entry.name) ?? null;
-    const projectName = workspacePath?.split("/").pop() ?? null;
+    const projectName = workspacePath ? basename(workspacePath) : null;
 
     const files = await readdir(sessionsDir);
     const jsonlFiles = files.filter((f: string) => f.endsWith(".jsonl"));
@@ -196,10 +197,7 @@ export async function scanSessions(): Promise<Conversation[]> {
 
         const title =
           session.customTitle ||
-          (() => {
-            const text = extractMessageText(requests[0]);
-            return text.length > 80 ? `${text.slice(0, 80)}…` : text || "Untitled";
-          })();
+          (truncateTitle(extractMessageText(requests[0])) || "Untitled");
 
         const creationDate = session.creationDate
           ? new Date(session.creationDate).toISOString()
@@ -225,7 +223,7 @@ export async function scanSessions(): Promise<Conversation[]> {
     }
   }
 
-  return conversations.sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+  return conversations.sort(compareLastMessageDesc);
 }
 
 /**
@@ -320,7 +318,7 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
     const hashDir = basename(join(filePath, "..", ".."));
     const workspaces = await resolveWorkspaces();
     const workspacePath = workspaces.get(hashDir) ?? null;
-    const projectName = workspacePath?.split("/").pop() ?? null;
+    const projectName = workspacePath ? basename(workspacePath) : null;
 
     const messages: Message[] = [];
 
@@ -350,11 +348,7 @@ export async function parseSession(filePath: string): Promise<ConversationDetail
     }
 
     const title =
-      session.customTitle ||
-      (() => {
-        const text = extractMessageText(requests[0]);
-        return text.length > 80 ? `${text.slice(0, 80)}…` : text || "Untitled";
-      })();
+      session.customTitle || (truncateTitle(extractMessageText(requests[0])) || "Untitled");
 
     const creationDate = session.creationDate ? new Date(session.creationDate).toISOString() : "";
 
