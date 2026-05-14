@@ -9,6 +9,7 @@ export interface ProviderSyncResult {
   conversations: number;
   memoryFiles: number;
   duration: number;
+  error?: string;
 }
 
 export interface SyncResult {
@@ -44,14 +45,29 @@ async function executeSync(providerFilter?: ProviderId): Promise<SyncResult> {
     if (!parser.available()) continue;
 
     const s = Date.now();
-    const conversations = await parser.scanSessions();
-
+    let conversations: Conversation[] = [];
     let memoryFiles: MemoryFile[] = [];
+    const errors: string[] = [];
+
+    try {
+      conversations = await parser.scanSessions();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`scanSessions: ${message}`);
+      console.error(`[sync] ${parser.id} scanSessions failed:`, err);
+    }
+
     if (parser.scanMemoryFiles) {
-      const projectPaths = Array.from(
-        new Set(conversations.map((c) => c.projectPath).filter((p): p is string => p !== null)),
-      );
-      memoryFiles = await parser.scanMemoryFiles(projectPaths);
+      try {
+        const projectPaths = Array.from(
+          new Set(conversations.map((c) => c.projectPath).filter((p): p is string => p !== null)),
+        );
+        memoryFiles = await parser.scanMemoryFiles(projectPaths);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        errors.push(`scanMemoryFiles: ${message}`);
+        console.error(`[sync] ${parser.id} scanMemoryFiles failed:`, err);
+      }
     }
 
     const existing = cache.get<Conversation[]>("conversations:list") ?? [];
@@ -65,6 +81,7 @@ async function executeSync(providerFilter?: ProviderId): Promise<SyncResult> {
       conversations: conversations.length,
       memoryFiles: memoryFiles.length,
       duration: Date.now() - s,
+      ...(errors.length > 0 ? { error: errors.join("; ") } : {}),
     };
   }
 
