@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-14
+
 ### Developer Experience
 
 - `bun test` suite covering parser contracts, `_shared` helpers, and per-provider `parseSession` fixtures (Claude Code, Codex, Copilot, Copilot CLI, Gemini) — valid + malformed inputs both asserted
