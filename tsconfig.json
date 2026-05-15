@@ -9,7 +9,7 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["node"],
+    "types": ["node", "bun"],
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
