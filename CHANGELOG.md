@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Developer Experience
+
+- `bun test` suite covering parser contracts, `_shared` helpers, and per-provider `parseSession` fixtures (Claude Code, Codex, Copilot, Copilot CLI, Gemini) — valid + malformed inputs both asserted
+- Vitest + `@vue/test-utils` + `happy-dom` set up for frontend smoke tests; covers `ProviderBadge`, `MessageBubble`, `ConversationCard`, `MemoryFileCard`, plus a `ConversationListPage` loading-to-success transition
+- `bun run test` runs both suites; `bun run check` now includes them so the CI workflow enforces tests automatically
+
 ## [0.2.1] - 2026-05-14
 
 ### Added

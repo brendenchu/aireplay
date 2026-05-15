@@ -87,7 +87,7 @@ aireplay runs a local HTTP server with **no authentication**. Conversations are 
 
 ## Contributing
 
-PRs welcome. Run `bun run lint` and `bun run typecheck` before submitting.
+PRs welcome. Run `bun run check` (lint + typecheck) and `bun run build` before submitting — GitHub Actions runs the same on every PR.
 
 ## License
 
