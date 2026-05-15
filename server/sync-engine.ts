@@ -1,22 +1,13 @@
 import type { Conversation } from "../src/types/conversation";
 import type { MemoryFile } from "../src/types/memory";
 import type { ProviderId } from "../src/types/provider";
+import type { ProviderSyncResult, SyncResult } from "../src/types/sync";
 import { cache } from "./cache";
 import { PARSERS } from "./parsers";
 import { compareLastMessageDesc } from "./parsers/_shared";
 import { invalidateWorkspaceCache } from "./parsers/copilot";
 
-export interface ProviderSyncResult {
-  conversations: number;
-  memoryFiles: number;
-  duration: number;
-  error?: string;
-}
-
-export interface SyncResult {
-  providers: Record<string, ProviderSyncResult>;
-  duration: number;
-}
+export type { ProviderSyncResult, SyncResult };
 
 let inFlight: Promise<SyncResult> | null = null;
 let lastSyncedAt: string | null = null;
