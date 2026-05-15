@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-05-14
+
+### Added
+
+- Typed API client at `src/api/client.ts` with `ApiError` (carries `status`, `isNotFound`, `isTransient`) and `AbortSignal` support on every request
+- `useAsyncResource` composable + `AsyncState` component encapsulate loading / error / empty UX; in-flight fetches abort on unmount or reload
+- List pages (conversations, memory, projects, dashboard) now distinguish loading, error (with Retry), and empty states; previously a failed fetch silently rendered an empty page
+- Detail pages (conversation, project, memory edit) distinguish 404 (resource missing) from transient errors (Retry surfaced)
+
+### Changed
+
+- All page-level `fetch()` calls replaced with typed-client functions; response interfaces colocated with the client module
+- Memory save errors no longer throw on non-JSON responses — the typed-client error path falls back to `statusText`
+
+### Developer Experience
+
+- `apiClient.spec.ts` covers query-string assembly, JSON/non-JSON error paths, network rejection, and `ApiError` status helpers
+
 ## [0.2.2] - 2026-05-14
 
 ### Developer Experience
