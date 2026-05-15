@@ -14,19 +14,24 @@
       </template>
     </PageHeader>
 
-    <div v-if="loading" class="text-muted-foreground py-8">Loading…</div>
-
-    <template v-else>
-      <div v-if="filtered.length === 0" class="text-muted-foreground py-8">No memory files found.</div>
-      <div v-else class="flex flex-col gap-2">
+    <AsyncState
+      :loading="loading"
+      :error="error"
+      :empty="filtered.length === 0"
+      empty-text="No memory files found."
+      :on-retry="reload"
+    >
+      <div class="flex flex-col gap-2">
         <MemoryFileCard v-for="file in filtered" :key="file.id" :file="file" />
       </div>
-    </template>
+    </AsyncState>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { listMemoryFiles } from "@/api/client";
+import AsyncState from "@/components/AsyncState.vue";
 import MemoryFileCard from "@/components/MemoryFileCard.vue";
 import PageHeader from "@/components/PageHeader.vue";
 import {
@@ -36,30 +41,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { MemoryFile } from "@/types/memory";
+import { useAsyncResource } from "@/composables/useAsyncResource";
 import type { ProviderFilter } from "@/types/provider";
 import { PROVIDER_NAMES } from "@/types/provider";
 
-const files = ref<MemoryFile[]>([]);
-const loading = ref(true);
 const providerFilter = ref<ProviderFilter>("all");
 
+const { data, loading, error, load, reload } = useAsyncResource((signal) =>
+  listMemoryFiles({ signal }),
+);
+
 const filtered = computed(() => {
-  const list =
-    providerFilter.value === "all"
-      ? files.value
-      : files.value.filter((f) => f.provider === providerFilter.value);
-  return [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const list = data.value?.data ?? [];
+  const scoped =
+    providerFilter.value === "all" ? list : list.filter((f) => f.provider === providerFilter.value);
+  return [...scoped].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 });
 
-onMounted(async () => {
-  try {
-    const res = await fetch("/api/memory");
-    files.value = (await res.json()).data;
-  } catch {
-    // leave empty
-  } finally {
-    loading.value = false;
-  }
-});
+onMounted(load);
 </script>

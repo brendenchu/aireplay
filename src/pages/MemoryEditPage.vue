@@ -53,32 +53,52 @@
         >
           Reset
         </Button>
-        <span v-if="saveMessage" class="text-sm text-primary">{{ saveMessage }}</span>
+        <span v-if="saveMessage" class="text-sm" :class="saveError ? 'text-destructive' : 'text-primary'">{{ saveMessage }}</span>
       </div>
     </template>
 
-    <div v-else class="text-muted-foreground py-8">Memory file not found.</div>
+    <div v-else-if="error?.isNotFound" class="text-muted-foreground py-8">Memory file not found.</div>
+
+    <div v-else-if="error" class="py-8">
+      <div class="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+        <div class="font-medium text-destructive mb-1">Couldn't load this file</div>
+        <div class="text-muted-foreground mb-3">{{ error.message }}</div>
+        <Button size="sm" variant="outline" @click="reloadFile">Retry</Button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute } from "vue-router";
+import { ApiError, getMemoryFile, saveMemoryFile } from "@/api/client";
 import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import type { MemoryFile } from "@/types/memory";
+import { useAsyncResource } from "@/composables/useAsyncResource";
 
 const route = useRoute();
-const file = ref<MemoryFile | null>(null);
 const content = ref("");
-const loading = ref(true);
 const saving = ref(false);
 const saveMessage = ref("");
+const saveError = ref(false);
+
+const {
+  data: file,
+  loading,
+  error,
+  load: loadFile,
+  reload: reloadFile,
+} = useAsyncResource((signal) => getMemoryFile(route.params.id as string, { signal }));
+
+watch(file, (next) => {
+  if (next) content.value = next.content;
+});
 
 const hasUnsavedChanges = computed(
   () => file.value !== null && content.value !== file.value.content,
@@ -118,38 +138,27 @@ const previewHtml = computed(() => {
   return DOMPurify.sanitize(raw);
 });
 
-onMounted(async () => {
+onMounted(() => {
   window.addEventListener("beforeunload", beforeUnloadHandler);
-
-  const id = route.params.id as string;
-  const res = await fetch(`/api/memory/${encodeURIComponent(id)}`);
-  if (res.ok) {
-    file.value = await res.json();
-    content.value = file.value?.content ?? "";
-  }
-  loading.value = false;
+  loadFile();
 });
 
 async function save() {
   if (!file.value) return;
   saving.value = true;
   saveMessage.value = "";
+  saveError.value = false;
 
-  const res = await fetch(`/api/memory/${encodeURIComponent(file.value.id)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content: content.value }),
-  });
-
-  if (res.ok) {
+  try {
+    await saveMemoryFile(file.value.id, content.value);
     file.value.content = content.value;
     saveMessage.value = "Saved";
     setTimeout(() => (saveMessage.value = ""), 2000);
-  } else {
-    const err = await res.json();
-    saveMessage.value = `Error: ${err.error}`;
+  } catch (err) {
+    saveError.value = true;
+    saveMessage.value = err instanceof ApiError ? `Error: ${err.message}` : "Error: save failed";
+  } finally {
+    saving.value = false;
   }
-
-  saving.value = false;
 }
 </script>

@@ -2,11 +2,14 @@
   <div>
     <PageHeader title="Projects" />
 
-    <div v-if="loading" class="text-muted-foreground py-8">Loading…</div>
-
-    <template v-else>
-      <div v-if="projects.length === 0" class="text-muted-foreground py-8">No projects found.</div>
-      <div v-else class="flex flex-col gap-2">
+    <AsyncState
+      :loading="loading"
+      :error="error"
+      :empty="projects.length === 0"
+      empty-text="No projects found."
+      :on-retry="reload"
+    >
+      <div class="flex flex-col gap-2">
         <RouterLink
           v-for="project in projects"
           :key="project.id"
@@ -31,28 +34,24 @@
           </Card>
         </RouterLink>
       </div>
-    </template>
+    </AsyncState>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted } from "vue";
+import { listProjects } from "@/api/client";
+import AsyncState from "@/components/AsyncState.vue";
 import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
 import { Card, CardContent } from "@/components/ui/card";
-import type { Project } from "@/types/conversation";
+import { useAsyncResource } from "@/composables/useAsyncResource";
 
-const projects = ref<Project[]>([]);
-const loading = ref(true);
+const { data, loading, error, load, reload } = useAsyncResource((signal) =>
+  listProjects({ signal }),
+);
 
-onMounted(async () => {
-  try {
-    const res = await fetch("/api/projects");
-    projects.value = (await res.json()).data;
-  } catch {
-    // leave empty
-  } finally {
-    loading.value = false;
-  }
-});
+const projects = computed(() => data.value?.data ?? []);
+
+onMounted(load);
 </script>

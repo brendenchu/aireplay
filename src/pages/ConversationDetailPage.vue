@@ -21,33 +21,44 @@
       </div>
     </template>
 
-    <div v-else class="text-muted-foreground py-8">Conversation not found.</div>
+    <div v-else-if="error?.isNotFound" class="text-muted-foreground py-8">
+      Conversation not found.
+    </div>
+
+    <div v-else-if="error" class="py-8">
+      <div class="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+        <div class="font-medium text-destructive mb-1">Couldn't load this conversation</div>
+        <div class="text-muted-foreground mb-3">{{ error.message }}</div>
+        <Button size="sm" variant="outline" @click="reload">Retry</Button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
+import { getConversation } from "@/api/client";
 import MessageBubble from "@/components/MessageBubble.vue";
 import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
-import type { ConversationDetail } from "@/types/conversation";
+import { Button } from "@/components/ui/button";
+import { useAsyncResource } from "@/composables/useAsyncResource";
 import { formatDate } from "@/utils/format";
 
 const route = useRoute();
-const conversation = ref<ConversationDetail | null>(null);
-const loading = ref(true);
+
+const {
+  data: conversation,
+  loading,
+  error,
+  load,
+  reload,
+} = useAsyncResource((signal) => getConversation(route.params.id as string, { signal }));
 
 const visibleMessages = computed(
   () => conversation.value?.messages.filter((m) => m.content.trim() || m.toolCalls?.length) ?? [],
 );
 
-onMounted(async () => {
-  const id = route.params.id as string;
-  const res = await fetch(`/api/conversations/${encodeURIComponent(id)}`);
-  if (res.ok) {
-    conversation.value = await res.json();
-  }
-  loading.value = false;
-});
+onMounted(load);
 </script>

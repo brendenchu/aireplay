@@ -42,30 +42,43 @@ const globalConfig = {
 };
 
 describe("ConversationListPage", () => {
-  beforeEach(() => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ data: conversations }),
-      }),
-    );
-  });
-
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  test("shows loading state then renders fetched conversations", async () => {
+  test("renders fetched conversations after load resolves", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => JSON.stringify({ data: conversations, total: conversations.length }),
+      }),
+    );
+
     const wrapper = mount(ConversationListPage, { global: globalConfig });
-
-    expect(wrapper.text()).toContain("Loading");
-
     await flushPromises();
 
     expect(wrapper.text()).not.toContain("Loading");
     expect(wrapper.text()).toContain("First conversation");
     expect(wrapper.text()).toContain("Second conversation");
     expect(wrapper.text()).toContain("repo-a");
+  });
+
+  test("shows error state with Retry when fetch fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        text: async () => JSON.stringify({ error: "Boom" }),
+      }),
+    );
+
+    const wrapper = mount(ConversationListPage, { global: globalConfig });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Boom");
+    expect(wrapper.text()).toContain("Retry");
   });
 });

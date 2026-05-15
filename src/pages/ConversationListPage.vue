@@ -14,19 +14,24 @@
       </template>
     </PageHeader>
 
-    <div v-if="loading" class="text-muted-foreground py-8">Loading…</div>
-
-    <template v-else>
-      <div v-if="filtered.length === 0" class="text-muted-foreground py-8">No conversations found.</div>
-      <div v-else class="flex flex-col gap-2">
+    <AsyncState
+      :loading="loading"
+      :error="error"
+      :empty="filtered.length === 0"
+      empty-text="No conversations found."
+      :on-retry="reload"
+    >
+      <div class="flex flex-col gap-2">
         <ConversationCard v-for="convo in filtered" :key="convo.id" :conversation="convo" />
       </div>
-    </template>
+    </AsyncState>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { listConversations } from "@/api/client";
+import AsyncState from "@/components/AsyncState.vue";
 import ConversationCard from "@/components/ConversationCard.vue";
 import PageHeader from "@/components/PageHeader.vue";
 import {
@@ -36,35 +41,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Conversation } from "@/types/conversation";
+import { useAsyncResource } from "@/composables/useAsyncResource";
 import type { ProviderFilter } from "@/types/provider";
 import { PROVIDER_NAMES } from "@/types/provider";
 
-const conversations = ref<Conversation[]>([]);
-const loading = ref(true);
 const providerFilter = ref<ProviderFilter>("all");
 
+const { data, loading, error, load, reload } = useAsyncResource((signal) =>
+  listConversations({ limit: 200, signal }),
+);
+
 const filtered = computed(() => {
-  const list =
-    providerFilter.value === "all"
-      ? conversations.value
-      : conversations.value.filter((c) => c.provider === providerFilter.value);
-  return [...list].sort((a, b) =>
+  const list = data.value?.data ?? [];
+  const scoped =
+    providerFilter.value === "all" ? list : list.filter((c) => c.provider === providerFilter.value);
+  return [...scoped].sort((a, b) =>
     (b.lastMessageAt || b.startedAt).localeCompare(a.lastMessageAt || a.startedAt),
   );
 });
 
-async function load() {
-  loading.value = true;
-  try {
-    const res = await fetch("/api/conversations?limit=200");
-    conversations.value = (await res.json()).data;
-  } catch {
-    // silently handle
-  } finally {
-    loading.value = false;
-  }
-}
-
-onMounted(() => load());
+onMounted(load);
 </script>

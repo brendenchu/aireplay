@@ -18,6 +18,14 @@
 
     <div v-if="loading" class="text-muted-foreground py-8">Searching…</div>
 
+    <div v-else-if="error" class="py-8">
+      <div class="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+        <div class="font-medium text-destructive mb-1">Search failed</div>
+        <div class="text-muted-foreground mb-3">{{ error.message }}</div>
+        <Button size="sm" variant="outline" @click="search">Retry</Button>
+      </div>
+    </div>
+
     <template v-else-if="results.length > 0">
       <div class="flex flex-col gap-2">
         <RouterLink
@@ -42,16 +50,18 @@
       </div>
     </template>
 
-    <div v-else-if="searched && !loading" class="text-muted-foreground py-8">No results found.</div>
+    <div v-else-if="searched" class="text-muted-foreground py-8">No results found.</div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from "vue";
+import { ApiError, search as searchApi } from "@/api/client";
 import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
 import SearchBar from "@/components/SearchBar.vue";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
@@ -63,23 +73,30 @@ import {
 import type { SearchResult } from "@/types/search";
 
 const query = ref("");
-const typeFilter = ref("all");
+const typeFilter = ref<"all" | "conversation" | "memory">("all");
 const results = ref<SearchResult[]>([]);
 const loading = ref(false);
 const searched = ref(false);
+const error = ref<ApiError | null>(null);
 
 async function search() {
   if (!query.value.trim()) return;
 
   loading.value = true;
   searched.value = true;
+  error.value = null;
 
-  const params = new URLSearchParams({ q: query.value });
-  if (typeFilter.value !== "all") params.set("type", typeFilter.value);
-
-  const res = await fetch(`/api/search?${params}`);
-  const json = await res.json();
-  results.value = json.results ?? [];
-  loading.value = false;
+  try {
+    const response = await searchApi({
+      q: query.value,
+      type: typeFilter.value === "all" ? undefined : typeFilter.value,
+    });
+    results.value = response.results;
+  } catch (err) {
+    results.value = [];
+    error.value = err instanceof ApiError ? err : new ApiError(0, "Search failed");
+  } finally {
+    loading.value = false;
+  }
 }
 </script>

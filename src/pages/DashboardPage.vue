@@ -14,10 +14,7 @@
       </template>
     </PageHeader>
 
-    <div v-if="loading" class="text-muted-foreground py-8">Syncing providers…</div>
-    <div v-else-if="error" class="text-destructive py-8">{{ error }}</div>
-
-    <template v-else>
+    <AsyncState :loading="loading" :error="error" loading-text="Syncing providers…" :on-retry="reload">
       <!-- Summary stats -->
       <div class="grid grid-cols-3 gap-3 mb-6">
         <Card v-for="stat in stats" :key="stat.label" size="sm" class="px-5">
@@ -77,12 +74,14 @@
           </CardContent>
         </Card>
       </div>
-    </template>
+    </AsyncState>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { getSyncStatus, listConversations, listMemoryFiles } from "@/api/client";
+import AsyncState from "@/components/AsyncState.vue";
 import ConversationCard from "@/components/ConversationCard.vue";
 import MemoryFileCard from "@/components/MemoryFileCard.vue";
 import PageHeader from "@/components/PageHeader.vue";
@@ -96,21 +95,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useAsyncResource } from "@/composables/useAsyncResource";
 import type { Conversation } from "@/types/conversation";
 import type { MemoryFile } from "@/types/memory";
-import type { ProviderFilter, ProviderStatus } from "@/types/provider";
+import type { ProviderFilter } from "@/types/provider";
 import { PROVIDER_NAMES } from "@/types/provider";
 
 type FeedItem =
   | { type: "conversation"; data: Conversation; date: string }
   | { type: "memory"; data: MemoryFile; date: string };
 
-const providers = ref<ProviderStatus[]>([]);
-const conversations = ref<Conversation[]>([]);
-const memoryFiles = ref<MemoryFile[]>([]);
-const loading = ref(true);
-const error = ref<string | null>(null);
 const providerFilter = ref<ProviderFilter>("all");
+
+const { data, loading, error, load, reload } = useAsyncResource(async (signal) => {
+  const [status, convos, memory] = await Promise.all([
+    getSyncStatus({ signal }),
+    listConversations({ limit: 200, signal }),
+    listMemoryFiles({ signal }),
+  ]);
+  return { providers: status.providers, conversations: convos.data, memoryFiles: memory.data };
+});
+
+const providers = computed(() => data.value?.providers ?? []);
+const conversations = computed(() => data.value?.conversations ?? []);
+const memoryFiles = computed(() => data.value?.memoryFiles ?? []);
 
 const totalConversations = computed(() =>
   providers.value.reduce((sum, p) => sum + p.stats.conversations, 0),
@@ -141,21 +149,5 @@ const feed = computed<FeedItem[]>(() => {
   return items.sort((a, b) => b.date.localeCompare(a.date));
 });
 
-onMounted(async () => {
-  try {
-    const [statusRes, convosRes, memoryRes] = await Promise.all([
-      fetch("/api/sync/status"),
-      fetch("/api/conversations?limit=200"),
-      fetch("/api/memory"),
-    ]);
-
-    providers.value = (await statusRes.json()).providers;
-    conversations.value = (await convosRes.json()).data;
-    memoryFiles.value = (await memoryRes.json()).data;
-  } catch {
-    error.value = "Failed to load dashboard data. Is the server running?";
-  } finally {
-    loading.value = false;
-  }
-});
+onMounted(load);
 </script>

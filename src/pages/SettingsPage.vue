@@ -16,6 +16,7 @@
           ({{ stats.duration }}ms)
         </div>
       </div>
+      <div v-if="syncErrorMessage" class="mt-3 text-sm text-destructive">{{ syncErrorMessage }}</div>
     </section>
 
     <Separator class="mb-8" />
@@ -76,6 +77,7 @@
 <script setup lang="ts">
 import { Monitor, Moon, Sun } from "lucide-vue-next";
 import { onMounted, ref } from "vue";
+import { ApiError, getSyncStatus, runSync } from "@/api/client";
 import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
 import { Button } from "@/components/ui/button";
@@ -83,6 +85,7 @@ import { Separator } from "@/components/ui/separator";
 import { type AccentColor, accentPalettes, useAccentColor } from "@/composables/useAccentColor";
 import { type Theme, useTheme } from "@/composables/useTheme";
 import type { ProviderStatus } from "@/types/provider";
+import type { SyncResult } from "@/types/sync";
 
 const { theme } = useTheme();
 const { accentColor } = useAccentColor();
@@ -94,37 +97,31 @@ const themeOptions: { value: Theme; label: string; icon: typeof Sun }[] = [
 
 const providers = ref<ProviderStatus[]>([]);
 const syncing = ref(false);
+const syncErrorMessage = ref<string | null>(null);
 const version = __APP_VERSION__;
-interface SyncProviderStats {
-  conversations: number;
-  memoryFiles: number;
-  duration: number;
+const syncResult = ref<SyncResult | null>(null);
+
+async function refreshStatus() {
+  try {
+    const status = await getSyncStatus();
+    providers.value = status.providers;
+  } catch {
+    // leave previous state
+  }
 }
 
-const syncResult = ref<{ providers: Record<string, SyncProviderStats> } | null>(null);
-
-onMounted(async () => {
-  try {
-    const res = await fetch("/api/sync/status");
-    providers.value = (await res.json()).providers;
-  } catch {
-    // leave empty
-  }
-});
+onMounted(refreshStatus);
 
 async function sync() {
   syncing.value = true;
   syncResult.value = null;
+  syncErrorMessage.value = null;
 
   try {
-    const res = await fetch("/api/sync", { method: "POST" });
-    syncResult.value = await res.json();
-
-    // Refresh provider status
-    const statusRes = await fetch("/api/sync/status");
-    providers.value = (await statusRes.json()).providers;
-  } catch {
-    // leave previous state
+    syncResult.value = await runSync();
+    await refreshStatus();
+  } catch (err) {
+    syncErrorMessage.value = err instanceof ApiError ? err.message : "Sync failed";
   } finally {
     syncing.value = false;
   }

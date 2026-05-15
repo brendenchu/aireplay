@@ -2,26 +2,26 @@
   <div>
     <div v-if="loading" class="text-muted-foreground py-8">Loading…</div>
 
-    <template v-else-if="project">
-      <PageHeader :title="project.name" back-to="/projects">
+    <template v-else-if="data">
+      <PageHeader :title="data.project.name" back-to="/projects">
         <div class="flex gap-3 text-xs text-muted-foreground items-center mt-1">
-          <span class="font-mono">{{ project.path }}</span>
-          <ProviderBadge v-for="p in project.providers" :key="p" :provider="p" />
+          <span class="font-mono">{{ data.project.path }}</span>
+          <ProviderBadge v-for="p in data.project.providers" :key="p" :provider="p" />
         </div>
       </PageHeader>
 
-      <section v-if="memoryFiles.length > 0" class="mb-8">
+      <section v-if="data.memoryFiles.length > 0" class="mb-8">
         <h3 class="text-base text-muted-foreground mb-3">Memory Files</h3>
         <div class="flex flex-col gap-2">
-          <MemoryFileCard v-for="mem in memoryFiles" :key="mem.id" :file="mem" />
+          <MemoryFileCard v-for="mem in data.memoryFiles" :key="mem.id" :file="mem" />
         </div>
       </section>
 
       <section class="mb-8">
-        <h3 class="text-base text-muted-foreground mb-3">Conversations ({{ conversations.length }})</h3>
+        <h3 class="text-base text-muted-foreground mb-3">Conversations ({{ data.conversations.length }})</h3>
         <div class="flex flex-col gap-2">
           <ConversationCard
-            v-for="convo in conversations"
+            v-for="convo in data.conversations"
             :key="convo.id"
             :conversation="convo"
           />
@@ -29,35 +29,34 @@
       </section>
     </template>
 
-    <div v-else class="text-muted-foreground py-8">Project not found.</div>
+    <div v-else-if="error?.isNotFound" class="text-muted-foreground py-8">Project not found.</div>
+
+    <div v-else-if="error" class="py-8">
+      <div class="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm">
+        <div class="font-medium text-destructive mb-1">Couldn't load this project</div>
+        <div class="text-muted-foreground mb-3">{{ error.message }}</div>
+        <Button size="sm" variant="outline" @click="reload">Retry</Button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted } from "vue";
 import { useRoute } from "vue-router";
+import { getProject } from "@/api/client";
 import ConversationCard from "@/components/ConversationCard.vue";
 import MemoryFileCard from "@/components/MemoryFileCard.vue";
 import PageHeader from "@/components/PageHeader.vue";
 import ProviderBadge from "@/components/ProviderBadge.vue";
-import type { Conversation, Project } from "@/types/conversation";
-import type { MemoryFile } from "@/types/memory";
+import { Button } from "@/components/ui/button";
+import { useAsyncResource } from "@/composables/useAsyncResource";
 
 const route = useRoute();
-const project = ref<Project | null>(null);
-const conversations = ref<Conversation[]>([]);
-const memoryFiles = ref<MemoryFile[]>([]);
-const loading = ref(true);
 
-onMounted(async () => {
-  const id = route.params.id as string;
-  const res = await fetch(`/api/projects/${encodeURIComponent(id)}`);
-  if (res.ok) {
-    const json = await res.json();
-    project.value = json.project;
-    conversations.value = json.conversations;
-    memoryFiles.value = json.memoryFiles;
-  }
-  loading.value = false;
-});
+const { data, loading, error, load, reload } = useAsyncResource((signal) =>
+  getProject(route.params.id as string, { signal }),
+);
+
+onMounted(load);
 </script>
